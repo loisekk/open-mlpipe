@@ -45,7 +45,15 @@ site/
 # Jupyter
 .ipynb_checkpoints/
 
-# Old files
+# Blog files (not needed in repo)
+blog-*.md
+
+# Old/legacy files
 mlpipe/
 run_tests.py
 test_pipeline.py
+generate_test_data.py
+guide.md
+DEPLOY.md
+render.yaml
+plan.md

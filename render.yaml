@@ -1,6 +1,0 @@
-# Render deployment configuration
-# This file tells Render how to build and deploy the documentation
-
-buildCommand: pip install mkdocs mkdocs-material mkdocstrings[python] && mkdocs build
-outputDirectory: site
-staticSite: true
