@@ -1,0 +1,259 @@
+/* open-mlpipe Documentation — Custom Theme */
+
+:root {
+  --md-primary-fg-color: #1a73e8;
+  --md-primary-fg-color-light: #4a9af5;
+  --md-primary-fg-color-dark: #0d47a1;
+  --md-accent-fg-color: #ff6b35;
+}
+
+/* Hero Section */
+.hero-banner {
+  background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 50%, #1565c0 100%);
+  color: white;
+  padding: 80px 40px;
+  text-align: center;
+  margin: -20px -20px 40px -20px;
+  border-radius: 0 0 20px 20px;
+}
+
+.hero-banner h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.hero-banner .subtitle {
+  font-size: 1.3rem;
+  opacity: 0.9;
+  margin-bottom: 30px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-badges {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 30px;
+}
+
+.hero-badges img {
+  height: 24px;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hero-buttons a {
+  display: inline-block;
+  padding: 14px 32px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.hero-buttons .btn-primary {
+  background: white;
+  color: #1a73e8;
+}
+
+.hero-buttons .btn-primary:hover {
+  background: #f0f0f0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.hero-buttons .btn-secondary {
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border: 2px solid rgba(255,255,255,0.5);
+}
+
+.hero-buttons .btn-secondary:hover {
+  background: rgba(255,255,255,0.25);
+  border-color: white;
+}
+
+/* Feature Cards */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin: 40px 0;
+}
+
+.feature-card {
+  background: var(--md-code-bg-color, #f8f9fa);
+  border: 1px solid var(--md-default-fg-color--lightest, #e0e0e0);
+  border-radius: 12px;
+  padding: 28px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(26, 115, 232, 0.15);
+  border-color: #1a73e8;
+}
+
+.feature-card .icon {
+  font-size: 2rem;
+  margin-bottom: 16px;
+}
+
+.feature-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.2rem;
+  color: var(--md-default-fg-color, #1a1a1a);
+}
+
+.feature-card p {
+  margin: 0;
+  color: var(--md-default-fg-color--light, #666);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Quick Start Section */
+.quickstart {
+  background: var(--md-code-bg-color, #f8f9fa);
+  border: 1px solid var(--md-default-fg-color--lightest, #e0e0e0);
+  border-radius: 12px;
+  padding: 32px;
+  margin: 40px 0;
+}
+
+.quickstart h2 {
+  margin-top: 0;
+  color: #1a73e8;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.step-number {
+  background: #1a73e8;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.step-content h4 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+}
+
+.step-content p {
+  margin: 0;
+  color: var(--md-default-fg-color--light, #666);
+}
+
+/* Code Blocks */
+.md-typeset pre {
+  border-radius: 8px;
+  border-left: 4px solid #1a73e8;
+}
+
+.md-typeset code {
+  font-size: 0.9rem;
+}
+
+/* Tables */
+.md-typeset table:not([class]) {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.md-typeset table:not([class]) th {
+  background: #1a73e8;
+  color: white;
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) tr:hover {
+  background: rgba(26, 115, 232, 0.05);
+}
+
+/* Navigation */
+.md-header {
+  background: #1a73e8;
+}
+
+.md-tabs {
+  background: #0d47a1;
+}
+
+/* Footer */
+.md-footer {
+  background: #1a1a1a;
+}
+
+/* Links */
+.md-typeset a {
+  color: #1a73e8;
+}
+
+.md-typeset a:hover {
+  color: #0d47a1;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .hero-banner {
+    padding: 40px 20px;
+  }
+  
+  .hero-banner h1 {
+    font-size: 2rem;
+  }
+  
+  .hero-banner .subtitle {
+    font-size: 1rem;
+  }
+  
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .hero-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .hero-banner {
+    background: #1a73e8 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .feature-card {
+    break-inside: avoid;
+  }
+}

@@ -5,6 +5,14 @@
          <lastmod>2026-07-17</lastmod>
     </url>
     <url>
+         <loc>https://loisekk.github.io/open-mlpipe/contributing/</loc>
+         <lastmod>2026-07-17</lastmod>
+    </url>
+    <url>
+         <loc>https://loisekk.github.io/open-mlpipe/faq/</loc>
+         <lastmod>2026-07-17</lastmod>
+    </url>
+    <url>
          <loc>https://loisekk.github.io/open-mlpipe/api/config/</loc>
          <lastmod>2026-07-17</lastmod>
     </url>
@@ -34,6 +42,18 @@
     </url>
     <url>
          <loc>https://loisekk.github.io/open-mlpipe/concepts/supported-models/</loc>
+         <lastmod>2026-07-17</lastmod>
+    </url>
+    <url>
+         <loc>https://loisekk.github.io/open-mlpipe/examples/classification/</loc>
+         <lastmod>2026-07-17</lastmod>
+    </url>
+    <url>
+         <loc>https://loisekk.github.io/open-mlpipe/examples/custom-pipeline/</loc>
+         <lastmod>2026-07-17</lastmod>
+    </url>
+    <url>
+         <loc>https://loisekk.github.io/open-mlpipe/examples/regression/</loc>
          <lastmod>2026-07-17</lastmod>
     </url>
     <url>
