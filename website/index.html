@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>open-mlpipe — Production ML Pipeline</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">
+                <span class="logo-icon">🔥</span>
+                <span class="logo-text">open-mlpipe</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#models">Models</a>
+                <a href="#quickstart">Quick Start</a>
+                <a href="https://loisekk.github.io/open-mlpipe/">Docs</a>
+                <a href="https://github.com/loisekk/open-mlpipe">GitHub</a>
+            </div>
+            <div class="nav-actions">
+                <a href="https://pypi.org/project/open-mlpipe/" class="btn btn-outline">pip install open-mlpipe</a>
+                <a href="#quickstart" class="btn btn-primary">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <div class="hero-badge">
+                <i class="fas fa-rocket"></i> Now on PyPI — v1.0.0
+            </div>
+            <h1 class="hero-title">
+                Production ML pipelines<br>
+                <span class="gradient-text">in one line of Python</span>
+            </h1>
+            <p class="hero-subtitle">
+                From raw data to deployed model. 14+ models compared, hyperparameters tuned, 
+                explainability included. No PhD required.
+            </p>
+            <div class="hero-buttons">
+                <a href="#quickstart" class="btn btn-primary btn-lg">
+                    <i class="fas fa-play"></i> Get Started
+                </a>
+                <a href="https://github.com/loisekk/open-mlpipe" class="btn btn-outline btn-lg">
+                    <i class="fab fa-github"></i> Star on GitHub
+                </a>
+            </div>
+            <div class="hero-code">
+                <div class="code-header">
+                    <div class="code-dots">
+                        <span class="dot red"></span>
+                        <span class="dot yellow"></span>
+                        <span class="dot green"></span>
+                    </div>
+                    <span class="code-filename">quickstart.py</span>
+                </div>
+                <pre><code><span class="keyword">from</span> <span class="function">open_mlpipe</span> <span class="keyword">import</span> run
+
+<span class="comment"># One line — full pipeline</span>
+ctx = <span class="function">run</span>(<span class="string">"dataset.csv"</span>, target=<span class="string">"price"</span>)
+
+<span class="comment"># Access results</span>
+<span class="keyword">print</span>(<span class="string">f"Best model: </span>{ctx.best_model_name}<span class="string">"</span>)
+<span class="keyword">print</span>(<span class="string">f"Test R²: </span>{ctx.metrics[<span class="string">'test_r2'</span>]:.4f}<span class="string">"</span>)</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <section class="stats">
+        <div class="stats-container">
+            <div class="stat-item">
+                <div class="stat-number">14+</div>
+                <div class="stat-label">ML Models</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">12</div>
+                <div class="stat-label">Pipeline Stages</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">106</div>
+                <div class="stat-label">Tests Passing</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">1</div>
+                <div class="stat-label">Line of Code</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Features</span>
+                <h2 class="section-title">Everything you need for production ML</h2>
+                <p class="section-subtitle">From data loading to model deployment — all automated.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Auto EDA</h3>
+                    <p>Column hygiene, quality assessment, distributions, statistical tests, VIF analysis — all automatic.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔧</div>
+                    <h3>Feature Engineering</h3>
+                    <p>Missingness flags, interaction features, log transforms, datetime extraction — no manual work.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>14+ Models</h3>
+                    <p>Ridge, XGBoost, LightGBM, RandomForest, Stacking, Voting — auto-selected and compared.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Optuna Tuning</h3>
+                    <p>Hyperparameter optimization with 18 model-specific search spaces — finds the best parameters.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💡</div>
+                    <h3>SHAP Explainability</h3>
+                    <p>Global + local feature importance, dependence plots, waterfall explanations — understand your model.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💾</div>
+                    <h3>Production Ready</h3>
+                    <p>Full inference pipeline saved — raw data → prediction with no manual preprocessing.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">How It Works</span>
+                <h2 class="section-title">12 stages. One command.</h2>
+                <p class="section-subtitle">open-mlpipe runs a complete ML pipeline automatically.</p>
+            </div>
+            <div class="pipeline-visual">
+                <div class="pipeline-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Load & EDA</h4>
+                        <p>Auto-detect task, profile data</p>
+                    </div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Clean</h4>
+                        <p>Duplicates, outliers, missing</p>
+                    </div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Feature Eng</h4>
+                        <p>Interactions, log transforms</p>
+                    </div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Compare</h4>
+                        <p>14+ models head-to-head</p>
+                    </div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <h4>Tune</h4>
+                        <p>Optuna optimization</p>
+                    </div>
+                </div>
+                <div class="pipeline-arrow">→</div>
+                <div class="pipeline-step">
+                    <div class="step-number">6</div>
+                    <div class="step-content">
+                        <h4>Save</h4>
+                        <p>Production model ready</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Models Section -->
+    <section id="models" class="models">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Models</span>
+                <h2 class="section-title">14+ models compared automatically</h2>
+                <p class="section-subtitle">From linear to ensemble — all tested and ranked.</p>
+            </div>
+            <div class="models-grid">
+                <div class="model-category">
+                    <h3>Linear</h3>
+                    <div class="model-tags">
+                        <span class="model-tag">Ridge</span>
+                        <span class="model-tag">Lasso</span>
+                        <span class="model-tag">ElasticNet</span>
+                        <span class="model-tag">LinearRegression</span>
+                    </div>
+                </div>
+                <div class="model-category">
+                    <h3>Tree & Ensemble</h3>
+                    <div class="model-tags">
+                        <span class="model-tag">DecisionTree</span>
+                        <span class="model-tag">RandomForest</span>
+                        <span class="model-tag">ExtraTrees</span>
+                    </div>
+                </div>
+                <div class="model-category">
+                    <h3>Boosting</h3>
+                    <div class="model-tags">
+                        <span class="model-tag highlight">XGBoost</span>
+                        <span class="model-tag highlight">LightGBM</span>
+                        <span class="model-tag">GradientBoosting</span>
+                        <span class="model-tag">HistGradientBoosting</span>
+                        <span class="model-tag">AdaBoost</span>
+                    </div>
+                </div>
+                <div class="model-category">
+                    <h3>Ensemble</h3>
+                    <div class="model-tags">
+                        <span class="model-tag">Stacking</span>
+                        <span class="model-tag">Voting</span>
+                        <span class="model-tag">KNN</span>
+                        <span class="model-tag">SVM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Start -->
+    <section id="quickstart" class="quickstart">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Quick Start</span>
+                <h2 class="section-title">Get started in 30 seconds</h2>
+                <p class="section-subtitle">Install, run, done.</p>
+            </div>
+            <div class="quickstart-steps">
+                <div class="qs-step">
+                    <div class="qs-step-number">1</div>
+                    <h3>Install</h3>
+                    <div class="qs-code">
+                        <code>pip install open-mlpipe</code>
+                    </div>
+                </div>
+                <div class="qs-step">
+                    <div class="qs-step-number">2</div>
+                    <h3>Run</h3>
+                    <div class="qs-code">
+                        <code>from open_mlpipe import run<br>ctx = run("data.csv", target="price")</code>
+                    </div>
+                </div>
+                <div class="qs-step">
+                    <div class="qs-step-number">3</div>
+                    <h3>Results</h3>
+                    <div class="qs-code">
+                        <code>print(ctx.best_model_name)<br>print(ctx.metrics["test_r2"])</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <div class="section-container">
+            <h2>Ready to build production ML pipelines?</h2>
+            <p>Start building in minutes, not weeks.</p>
+            <div class="cta-buttons">
+                <a href="https://pypi.org/project/open-mlpipe/" class="btn btn-primary btn-lg">
+                    <i class="fas fa-download"></i> Install Now
+                </a>
+                <a href="https://loisekk.github.io/open-mlpipe/" class="btn btn-outline btn-lg">
+                    <i class="fas fa-book"></i> Read Docs
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <span class="logo-icon">🔥</span>
+                <span class="logo-text">open-mlpipe</span>
+                <p>Production-level automated ML pipeline</p>
+            </div>
+            <div class="footer-links">
+                <div class="footer-col">
+                    <h4>Product</h4>
+                    <a href="#features">Features</a>
+                    <a href="#models">Models</a>
+                    <a href="#quickstart">Quick Start</a>
+                    <a href="https://loisekk.github.io/open-mlpipe/">Documentation</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Resources</h4>
+                    <a href="https://pypi.org/project/open-mlpipe/">PyPI</a>
+                    <a href="https://github.com/loisekk/open-mlpipe">GitHub</a>
+                    <a href="https://github.com/loisekk/open-mlpipe/issues">Issues</a>
+                </div>
+                <div class="footer-col">
+                    <h4>Community</h4>
+                    <a href="https://github.com/loisekk/open-mlpipe">Star on GitHub</a>
+                    <a href="https://github.com/loisekk/open-mlpipe/blob/main/CONTRIBUTING.md">Contributing</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 open-mlpipe. MIT License.</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
