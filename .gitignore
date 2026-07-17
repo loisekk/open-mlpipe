@@ -53,7 +53,6 @@ mlpipe/
 run_tests.py
 test_pipeline.py
 generate_test_data.py
-guide.md
 DEPLOY.md
 render.yaml
 plan.md
