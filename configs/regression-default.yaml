@@ -1,0 +1,49 @@
+# Regression — Insurance Charges Prediction
+# Usage: mlpipe run --config configs/regression-default.yaml
+
+project: insurance-charges
+task: auto
+level: 2
+
+data:
+  path: test_datasets/insurance.csv
+  target: charges
+  test_size: 0.2
+  random_state: 42
+
+cleaning:
+  remove_duplicates: true
+  missing_strategy: auto
+  outlier_method: auto
+
+feature_engineering:
+  auto_interactions: true
+  auto_log: true
+  datetime_features: true
+  missingness_flags: true
+
+model_selection:
+  candidates: [lightgbm, xgboost, random_forest, ridge]
+  scoring: [r2, neg_mean_absolute_error, neg_root_mean_squared_error]
+  ranking_primary: r2
+  cross_validation:
+    n_splits: 5
+    strategy: kfold
+
+tuning:
+  enabled: true
+  engine: optuna
+  n_trials: 30
+  timeout: 600
+
+feature_selection:
+  enabled: true
+  method: shap_importance
+  min_importance: 0.01
+
+evaluation:
+  explainability: true
+  shap_plots: [summary, dependence, waterfall]
+
+deployment:
+  enabled: false

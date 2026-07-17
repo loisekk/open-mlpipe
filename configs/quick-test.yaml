@@ -1,0 +1,23 @@
+# Quick Test — Minimal config for fast testing
+# Usage: mlpipe run --config configs/quick-test.yaml
+
+project: quick-test
+task: auto
+level: 2
+
+data:
+  path: test_datasets/all_numeric.csv
+  target: target
+  test_size: 0.2
+
+tuning:
+  enabled: false
+
+feature_selection:
+  enabled: false
+
+evaluation:
+  explainability: false
+
+deployment:
+  enabled: false

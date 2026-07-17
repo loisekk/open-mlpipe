@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ML artifacts
+artifacts/
+mlruns/
+mlartifacts/
+reports/
+test_datasets/
+examples/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+*.env.local
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Old files
+mlpipe/
+run_tests.py
+test_pipeline.py

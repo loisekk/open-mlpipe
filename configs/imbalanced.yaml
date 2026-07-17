@@ -1,0 +1,47 @@
+# Imbalanced Classification — Fraud Detection Pattern
+# Usage: mlpipe run --config configs/imbalanced.yaml
+
+project: imbalanced-demo
+task: auto
+level: 2
+
+data:
+  path: test_datasets/heart_disease.csv
+  target: target
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+cleaning:
+  remove_duplicates: true
+  missing_strategy: auto
+
+feature_engineering:
+  auto_interactions: true
+  auto_log: false
+  missingness_flags: true
+
+model_selection:
+  candidates: [lightgbm, xgboost, random_forest]
+  scoring: [f1, roc_auc, precision, recall]
+  ranking_primary: f1
+  cross_validation:
+    n_splits: 5
+    strategy: stratified_kfold
+
+tuning:
+  enabled: true
+  engine: optuna
+  n_trials: 50
+  timeout: 900
+
+feature_selection:
+  enabled: true
+  method: shap_importance
+
+evaluation:
+  explainability: true
+  shap_plots: [summary]
+
+deployment:
+  enabled: false
