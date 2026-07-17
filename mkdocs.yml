@@ -1,0 +1,137 @@
+# mkdocs.yml — open-mlpipe Documentation
+# Configuration for MkDocs with Material theme
+
+site_name: open-mlpipe
+site_url: https://loisekk.github.io/open-mlpipe/
+site_description: Production-level automated ML pipeline — from raw data to deployed model in one line
+site_author: Yash Brahmankar
+
+repo_url: https://github.com/loisekk/open-mlpipe
+repo_name: loisekk/open-mlpipe
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - navigation.instant
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+    - content.action.view
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/loisekk/open-mlpipe
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/open-mlpipe/
+  version:
+    provider: pypi
+    default: 1.0.0
+    alias: true
+
+extra_css:
+  - assets/styles.css
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: true
+            show_category_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            separate_signature: true
+            docstring_style: google
+            docstring_section_style: spacy
+            merge_init_into_class: true
+            show_signature_annotations: true
+            line_length: 80
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.keys
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - def_list
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Configuration: getting-started/configuration.md
+  - Guide:
+      - Overview: guide/overview.md
+      - Python API: guide/python-api.md
+      - CLI Usage: guide/cli.md
+      - YAML Config: guide/yaml-config.md
+  - Concepts:
+      - Pipeline Stages: concepts/pipeline-stages.md
+      - Supported Models: concepts/supported-models.md
+      - Metrics: concepts/metrics.md
+  - API Reference:
+      - open_mlpipe: api/open_mlpipe.md
+      - Config: api/config.md
+      - Core: api/core.md
+      - Stages: api/stages.md
+      - Utils: api/utils.md
+  - Examples:
+      - Regression: examples/regression.md
+      - Classification: examples/classification.md
+      - Custom Pipeline: examples/custom-pipeline.md
+  - FAQ: faq.md
+  - Contributing: contributing.md
