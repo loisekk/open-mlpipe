@@ -20,6 +20,11 @@ class ExplainStage(Stage):
 
         try:
             import shap
+        except ImportError:
+            print("    SHAP not installed. Install with: pip install open-mlpipe[explain]")
+            return ctx
+
+        try:
 
             # Get model from pipeline
             if hasattr(model, "named_steps") and "model" in model.named_steps:
