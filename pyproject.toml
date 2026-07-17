@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-mlpipe"
-version = "1.0.1"
+version = "1.0.0"
 description = "Production-level automated ML pipeline — from raw data to deployed model in one line"
 readme = "README.md"
 license = "MIT"
@@ -32,6 +32,7 @@ dependencies = [
     "xgboost>=2.0",
     "lightgbm>=4.0",
     "optuna>=3.6",
+    "shap>=0.45",
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "click>=8.0",
@@ -43,11 +44,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.1", "pre-commit"]
-explain = ["shap>=0.45"]
 catboost = ["catboost>=1.2"]
 mlflow = ["mlflow>=2.12"]
 deploy = ["fastapi>=0.110", "uvicorn>=0.29", "pyarrow>=14.0", "openpyxl>=3.1"]
-full = ["shap>=0.45", "catboost>=1.2", "mlflow>=2.12", "fastapi>=0.110", "uvicorn>=0.29", "pyarrow>=14.0", "openpyxl>=3.1", "imbalanced-learn>=0.12", "seaborn>=0.13", "matplotlib>=3.7"]
+full = ["catboost>=1.2", "mlflow>=2.12", "fastapi>=0.110", "uvicorn>=0.29", "pyarrow>=14.0", "openpyxl>=3.1", "imbalanced-learn>=0.12", "seaborn>=0.13", "matplotlib>=3.7"]
 
 [project.urls]
 Homepage = "https://github.com/yashb/mlpipe"

@@ -49,6 +49,9 @@ theme:
     text: Roboto
     code: Roboto Mono
 
+extra_css:
+  - assets/styles.css
+
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -59,9 +62,6 @@ extra:
     provider: pypi
     default: 1.0.0
     alias: true
-
-extra_css:
-  - assets/styles.css
 
 plugins:
   - search
