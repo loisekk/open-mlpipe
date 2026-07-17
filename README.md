@@ -366,7 +366,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 | **Website** | [open-mlpipe.onrender.com](https://open-mlpipe.onrender.com/) |
 | **Documentation** | [loisekk.github.io/open-mlpipe](https://loisekk.github.io/open-mlpipe/) |
 | **PyPI** | [pypi.org/project/open-mlpipe](https://pypi.org/project/open-mlpipe/) |
-| **GitHub** | [github.com/loisekk/open-mlpipe](https://github.com/loisekk/open-mlpipe) |
 | **Issues** | [github.com/loisekk/open-mlpipe/issues](https://github.com/loisekk/open-mlpipe/issues) |
 
 ---
