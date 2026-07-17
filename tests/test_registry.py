@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from mlpipe.core.registry import StageRegistry
-from mlpipe.stages.load import DataLoaderStage
+from open_mlpipe.core.registry import StageRegistry
+from open_mlpipe.stages.load import DataLoaderStage
 
 
 @pytest.mark.unit

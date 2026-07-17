@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from mlpipe.core.context import PipelineContext, StageMetadata
-from mlpipe.utils.typing import TaskType
+from open_mlpipe.core.context import PipelineContext, StageMetadata
+from open_mlpipe.utils.typing import TaskType
 
 
 @pytest.mark.unit

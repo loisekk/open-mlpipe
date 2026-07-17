@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from mlpipe.stages.deploy import DeployStage
+from open_mlpipe.stages.deploy import DeployStage
 
 
 class TestDeployStage:

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from mlpipe.config.schema import DataConfig, PipelineConfig
-from mlpipe.core.context import PipelineContext
-from mlpipe.stages.load import DataLoaderStage
-from mlpipe.utils.typing import TaskType
+from open_mlpipe.config.schema import DataConfig, PipelineConfig
+from open_mlpipe.core.context import PipelineContext
+from open_mlpipe.stages.load import DataLoaderStage
+from open_mlpipe.utils.typing import TaskType
 
 
 @pytest.mark.unit

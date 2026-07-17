@@ -10,8 +10,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from mlpipe.stages.evaluate import EvaluateStage
-from mlpipe.utils.typing import TaskType
+from open_mlpipe.stages.evaluate import EvaluateStage
+from open_mlpipe.utils.typing import TaskType
 
 
 def _build_preprocessor(ctx):
@@ -64,7 +64,7 @@ class TestEvaluateStage:
     def test_execute_populates_classification_metrics(
         self, sample_dataframe_classification,
     ):
-        from mlpipe.config.schema import (
+        from open_mlpipe.config.schema import (
             ArtifactConfig,
             CVConfig,
             DataConfig,
@@ -75,7 +75,7 @@ class TestEvaluateStage:
             PipelineConfig,
             TuningConfig,
         )
-        from mlpipe.core.context import PipelineContext
+        from open_mlpipe.core.context import PipelineContext
         df = sample_dataframe_classification
         ctx = PipelineContext()
         ctx.config = PipelineConfig(

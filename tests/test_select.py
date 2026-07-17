@@ -9,7 +9,7 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from mlpipe.stages.select import SelectStage
+from open_mlpipe.stages.select import SelectStage
 
 
 class TestSelectStage:

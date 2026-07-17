@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from mlpipe.stages.save import SaveStage
+from open_mlpipe.stages.save import SaveStage
 
 
 class TestSaveStage:

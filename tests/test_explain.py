@@ -9,7 +9,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from mlpipe.stages.explain import ExplainStage
+from open_mlpipe.stages.explain import ExplainStage
 
 
 class TestExplainStage:

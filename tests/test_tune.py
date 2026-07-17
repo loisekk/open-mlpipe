@@ -9,7 +9,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from mlpipe.stages.tune import TuneStage
+from open_mlpipe.stages.tune import TuneStage
 
 
 class TestTuneStage:

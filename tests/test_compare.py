@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mlpipe.stages.compare import CompareStage
+from open_mlpipe.stages.compare import CompareStage
 
 
 class TestCompareStage:

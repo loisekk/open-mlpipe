@@ -15,7 +15,7 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline as SKPipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-from mlpipe.config.schema import (
+from open_mlpipe.config.schema import (
     ArtifactConfig,
     CVConfig,
     DataConfig,
@@ -26,11 +26,11 @@ from mlpipe.config.schema import (
     PipelineConfig,
     TuningConfig,
 )
-from mlpipe.core.context import PipelineContext, StageMetadata
-from mlpipe.core.registry import StageRegistry
-from mlpipe.stages.eda import EDALoaderStage
-from mlpipe.stages.load import DataLoaderStage
-from mlpipe.utils.typing import ColumnType, TaskType
+from open_mlpipe.core.context import PipelineContext, StageMetadata
+from open_mlpipe.core.registry import StageRegistry
+from open_mlpipe.stages.eda import EDALoaderStage
+from open_mlpipe.stages.load import DataLoaderStage
+from open_mlpipe.utils.typing import ColumnType, TaskType
 
 TEST_DIR = Path(__file__).parent
 PROJECT_ROOT = TEST_DIR.parent

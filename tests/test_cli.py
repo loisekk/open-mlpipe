@@ -7,7 +7,7 @@ import pytest
 click = pytest.importorskip("click", reason="click is required for CLI tests")
 CliRunner = pytest.importorskip("click.testing", reason="click.testing is required for CLI tests").CliRunner
 
-from mlpipe.cli import main  # noqa: E402
+from open_mlpipe.cli import main  # noqa: E402
 
 
 @pytest.mark.unit

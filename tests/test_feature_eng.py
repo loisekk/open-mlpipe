@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mlpipe.config.schema import DataConfig, PipelineConfig
-from mlpipe.core.context import PipelineContext
-from mlpipe.stages.feature_eng import FeatureEngStage
+from open_mlpipe.config.schema import DataConfig, PipelineConfig
+from open_mlpipe.core.context import PipelineContext
+from open_mlpipe.stages.feature_eng import FeatureEngStage
 
 
 @pytest.mark.unit

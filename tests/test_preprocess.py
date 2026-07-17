@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from sklearn.compose import ColumnTransformer
 
-from mlpipe.stages.preprocess import PreprocessStage
+from open_mlpipe.stages.preprocess import PreprocessStage
 
 
 class TestPreprocessStage:

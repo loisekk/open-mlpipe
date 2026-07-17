@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mlpipe.config.schema import DataConfig, PipelineConfig
-from mlpipe.core.context import PipelineContext
-from mlpipe.stages.split import SplitStage
-from mlpipe.utils.typing import ColumnType, TaskType
+from open_mlpipe.config.schema import DataConfig, PipelineConfig
+from open_mlpipe.core.context import PipelineContext
+from open_mlpipe.stages.split import SplitStage
+from open_mlpipe.utils.typing import ColumnType, TaskType
 
 
 @pytest.mark.unit

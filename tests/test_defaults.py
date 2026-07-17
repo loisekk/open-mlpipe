@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from mlpipe.config.defaults import SmartDefaults
-from mlpipe.utils.typing import TaskType
+from open_mlpipe.config.defaults import SmartDefaults
+from open_mlpipe.utils.typing import TaskType
 
 
 @pytest.mark.unit

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mlpipe.config.schema import (
+from open_mlpipe.config.schema import (
     ArtifactConfig,
     CleaningConfig,
     DataConfig,

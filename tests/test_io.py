@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from mlpipe.utils.io import load_data, save_dataframe
+from open_mlpipe.utils.io import load_data, save_dataframe
 
 
 @pytest.mark.unit

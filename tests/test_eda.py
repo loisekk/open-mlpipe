@@ -5,9 +5,9 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from mlpipe.config.schema import DataConfig, PipelineConfig
-from mlpipe.core.context import PipelineContext
-from mlpipe.stages.eda import EDALoaderStage
+from open_mlpipe.config.schema import DataConfig, PipelineConfig
+from open_mlpipe.core.context import PipelineContext
+from open_mlpipe.stages.eda import EDALoaderStage
 
 
 @pytest.mark.unit

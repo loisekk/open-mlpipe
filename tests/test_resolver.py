@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from mlpipe.config.resolver import build_level1_config, load_config, resolve_config
-from mlpipe.config.schema import PipelineConfig
+from open_mlpipe.config.resolver import build_level1_config, load_config, resolve_config
+from open_mlpipe.config.schema import PipelineConfig
 
 
 @pytest.mark.unit

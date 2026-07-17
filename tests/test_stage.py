@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from mlpipe.core.context import PipelineContext
-from mlpipe.core.stage import Stage
+from open_mlpipe.core.context import PipelineContext
+from open_mlpipe.core.stage import Stage
 
 
 class _TestConcreteStage(Stage):
