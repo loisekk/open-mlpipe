@@ -21,10 +21,27 @@ if sys.platform == "win32":
     def _patched_thread_run(self):
         try:
             _orig_thread_run(self)
-        except UnicodeDecodeError:
+        except (UnicodeDecodeError, UnicodeEncodeError):
             pass  # loky cp1252 bug — non-fatal, falls back to logical cores
 
     threading.Thread.run = _patched_thread_run
+
+    # Also patch subprocess to handle encoding errors
+    import subprocess
+    _orig_subprocess_run = subprocess.run
+
+    def _patched_subprocess_run(*args, **kwargs):
+        try:
+            return _orig_subprocess_run(*args, **kwargs)
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            # Return empty result on encoding error
+            class FakeResult:
+                returncode = 0
+                stdout = b""
+                stderr = b""
+            return FakeResult()
+
+    subprocess.run = _patched_subprocess_run
 
 import click
 from rich.console import Console

@@ -133,19 +133,36 @@ def test_load_config_production_yaml():
 def test_resolve_config_auto_task_from_yaml():
     """resolve_config should detect task from data when task=auto."""
     from pathlib import Path
+    import tempfile
+    import os
 
-    config_path = Path(__file__).parent.parent / "configs" / "regression-default.yaml"
-    if not config_path.exists():
-        pytest.skip("configs/regression-default.yaml not found")
-
-    config = load_config(str(config_path))
-    assert config.task == "auto"
-
+    # Create a temp CSV file for testing
     import pandas as pd
-    df = pd.read_csv(config.data.path)
-    resolved = resolve_config(config, df=df)
-    assert resolved.task == "regression"
-    assert resolved.primary_metric != "auto"
+    import numpy as np
+
+    df = pd.DataFrame({
+        "feature1": np.random.normal(0, 1, 100),
+        "feature2": np.random.normal(5, 2, 100),
+        "target": np.random.normal(10, 3, 100),
+    })
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+        df.to_csv(f, index=False)
+        temp_path = f.name
+
+    try:
+        config = PipelineConfig(
+            project="test",
+            data={"path": temp_path, "target": "target"},
+        )
+        assert config.task == "auto"
+
+        df = pd.read_csv(temp_path)
+        resolved = resolve_config(config, df=df)
+        assert resolved.task == "regression"
+        assert resolved.primary_metric != "auto"
+    finally:
+        os.unlink(temp_path)
 
 
 @pytest.mark.unit
