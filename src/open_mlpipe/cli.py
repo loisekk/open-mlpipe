@@ -47,8 +47,6 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
-from rich.columns import Columns
 
 console = Console()
 
@@ -69,6 +67,7 @@ BANNER_TEMPLATE = """
 def print_banner():
     """Print the ASCII art banner with orange color."""
     import sys
+
     from open_mlpipe import __version__
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding='utf-8')
@@ -101,7 +100,7 @@ def print_completion_summary(ctx, start_time):
     # Metrics
     if ctx.metrics:
         for k, v in ctx.metrics.items():
-            if k.startswith("test_") and isinstance(v, (int, float)):
+            if k.startswith("test_") and isinstance(v, int | float):
                 if isinstance(v, float):
                     table.add_row(k, f"{v:.4f}")
                 else:
@@ -126,10 +125,8 @@ def print_completion_summary(ctx, start_time):
     console.print("[dim]Quick prediction:[/dim]")
     console.print(
         "[dim]  import joblib[/dim]\n"
-        "[dim]  model = joblib.load('{model_path}')[/dim]\n"
-        "[dim]  predictions = model.predict(new_data)[/dim]".format(
-            model_path=model_path
-        )
+        f"[dim]  model = joblib.load('{model_path}')[/dim]\n"
+        "[dim]  predictions = model.predict(new_data)[/dim]"
     )
 
 
@@ -145,20 +142,20 @@ def main(ctx):
 def interactive_mode():
     """Interactive mode - like Qwen Code."""
     print_banner()
-    
+
     console.print("[dim]Tips: Type 'run' to start pipeline, 'profile' for EDA, 'help' for commands, 'quit' to exit[/dim]\n")
-    
+
     while True:
         try:
             user_input = console.input("[bold green]> [/bold green]").strip()
-            
+
             if not user_input:
                 continue
-            
+
             if user_input.lower() in ("quit", "exit", "q"):
                 console.print("\n[bold cyan]Goodbye! Happy ML! :)[/bold cyan]\n")
                 break
-            
+
             if user_input.lower() == "help":
                 console.print("""
 [bold]Available Commands:[/bold]
@@ -173,7 +170,7 @@ def interactive_mode():
   > profile --data dataset.csv
 """)
                 continue
-            
+
             if user_input.lower() == "run":
                 console.print("\n[bold]Run Pipeline[/bold]")
                 console.print("[dim]Enter your data file path (or directory):[/dim]")
@@ -181,11 +178,11 @@ def interactive_mode():
                 if not data:
                     console.print("[red]No data file provided[/red]")
                     continue
-                
+
                 # Scan directory for datasets
                 from pathlib import Path
                 p = Path(data)
-                
+
                 if p.is_dir():
                     # Interactive dataset selection
                     csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
@@ -210,14 +207,14 @@ def interactive_mode():
                 else:
                     console.print(f"[red]Path not found: {data}[/red]")
                     continue
-                
+
                 console.print("[dim]Enter target column (or press Enter for auto-detect):[/dim]")
                 target = console.input("[bold green]> target: [/bold green]").strip() or None
-                
+
                 console.print(f"\n[bold]Starting pipeline for {Path(data).name}...[/bold]\n")
                 _run_pipeline(data, target)
                 continue
-            
+
             if user_input.lower() == "profile":
                 console.print("\n[bold]Profile Dataset[/bold]")
                 console.print("[dim]Enter your data file path:[/dim]")
@@ -225,11 +222,11 @@ def interactive_mode():
                 if not data:
                     console.print("[red]No data file provided[/red]")
                     continue
-                
+
                 console.print(f"\n[bold]Profiling {data}...[/bold]\n")
                 _profile_data(data, None)
                 continue
-            
+
             # Try to parse as a command
             parts = user_input.split()
             if parts[0].lower() == "run" and len(parts) > 1:
@@ -241,30 +238,30 @@ def interactive_mode():
                         data = parts[i + 1]
                     elif part in ("--target", "-t") and i + 1 < len(parts):
                         target = parts[i + 1]
-                
+
                 if data:
                     console.print(f"\n[bold]Starting pipeline for {data}...[/bold]\n")
                     _run_pipeline(data, target)
                 else:
                     console.print("[red]Please provide --data parameter[/red]")
                 continue
-            
+
             if parts[0].lower() == "profile" and len(parts) > 1:
                 data = None
                 for i, part in enumerate(parts[1:], 1):
                     if part in ("--data", "-d") and i + 1 < len(parts):
                         data = parts[i + 1]
-                
+
                 if data:
                     console.print(f"\n[bold]Profiling {data}...[/bold]\n")
                     _profile_data(data, None)
                 else:
                     console.print("[red]Please provide --data parameter[/red]")
                 continue
-            
+
             console.print(f"[red]Unknown command: {user_input}[/red]")
             console.print("[dim]Type 'help' for available commands[/dim]")
-            
+
         except KeyboardInterrupt:
             console.print("\n[bold cyan]Goodbye! Happy ML! :)[/bold cyan]\n")
             break
@@ -275,10 +272,11 @@ def interactive_mode():
 def _scan_and_show_datasets(path):
     """Scan directory for datasets and show columns."""
     from pathlib import Path
+
     import pandas as pd
-    
+
     p = Path(path)
-    
+
     # If it's a file, show its columns
     if p.is_file():
         try:
@@ -298,31 +296,31 @@ def _scan_and_show_datasets(path):
     elif p.is_dir():
         # Scan directory for CSV/Excel files
         csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
-        
+
         if csv_files:
             console.print(f"\n[bold cyan]Found {len(csv_files)} dataset(s) in {p.name}/[/bold cyan]\n")
-            
+
             table = Table(show_header=True, header_style="bold cyan")
             table.add_column("#", style="dim")
             table.add_column("File", style="green")
             table.add_column("Rows", justify="right")
             table.add_column("Columns", justify="right")
             table.add_column("Target Candidates")
-            
+
             for i, f in enumerate(csv_files[:10], 1):  # Show max 10
                 try:
                     df = pd.read_csv(f, nrows=100, low_memory=False)
                     rows = len(pd.read_csv(f, low_memory=False))
                     cols = len(df.columns)
-                    
+
                     # Guess target candidates (numeric columns)
                     num_cols = df.select_dtypes(include=["number"]).columns.tolist()
                     target_hint = ", ".join(num_cols[:3]) if num_cols else "None"
-                    
+
                     table.add_row(str(i), f.name, str(rows), str(cols), target_hint)
                 except Exception:
                     table.add_row(str(i), f.name, "?", "?", "?")
-            
+
             console.print(table)
             console.print()
         else:
@@ -334,11 +332,12 @@ def _scan_and_show_datasets(path):
 def _run_pipeline(data, target=None):
     """Run the ML pipeline."""
     from pathlib import Path
+
     from open_mlpipe.config.resolver import build_level1_config
     from open_mlpipe.core.pipeline import PipelineRunner
-    
+
     p = Path(data)
-    
+
     # If it's a directory, find the first CSV file
     if p.is_dir():
         csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
@@ -348,14 +347,14 @@ def _run_pipeline(data, target=None):
         else:
             console.print(f"[red]No CSV/Excel files found in {data}[/red]")
             return
-    
+
     start_time = time.time()
     pipeline_config = build_level1_config(data, target)
     pipeline_config.project = "openml"
-    
+
     runner = PipelineRunner(pipeline_config)
     ctx = runner.run()
-    
+
     print_completion_summary(ctx, start_time)
 
 
@@ -365,44 +364,44 @@ def _profile_data(data, target=None):
     from open_mlpipe.core.context import PipelineContext
     from open_mlpipe.stages.eda import EDALoaderStage
     from open_mlpipe.stages.load import DataLoaderStage
-    
+
     config = PipelineConfig(
         project="profile",
         data={"path": data, "target": target},
     )
-    
+
     ctx = PipelineContext(config=config)
     ctx = DataLoaderStage().execute(ctx)
     ctx = EDALoaderStage().execute(ctx)
-    
+
     if ctx.eda_report:
         console.print("\n[bold cyan]=== EDA Report ===[/bold cyan]\n")
-        
+
         quality = ctx.eda_report.get("quality", {})
         if quality.get("missing_count"):
             console.print("[bold]Missing Values:[/bold]")
             for col, count in quality["missing_count"].items():
                 pct = quality["missing_pct"].get(col, 0)
                 console.print(f"  {col}: {count} ({pct}%)")
-        
+
         if quality.get("n_duplicates"):
             console.print(f"\n[bold]Duplicates:[/bold] {quality['n_duplicates']} ({quality['duplicate_pct']}%)")
-        
+
         if quality.get("outliers"):
             console.print("\n[bold]Outliers:[/bold]")
             for col, info in quality["outliers"].items():
                 console.print(f"  {col}: {info['count']} ({info['pct']}%)")
-        
+
         dist = ctx.eda_report.get("distributions", {})
         if dist.get("highly_skewed"):
             console.print(f"\n[bold]Highly Skewed:[/bold] {dist['highly_skewed']}")
-        
+
         if ctx.statistical_tests is not None:
             console.print("\n[bold]Statistical Tests (significant features):[/bold]")
             sig = ctx.statistical_tests[ctx.statistical_tests["significant"]]
             for _, row in sig.iterrows():
                 console.print(f"  {row['feature']}: {row['test']} (p={row['p_value']:.4f})")
-        
+
         console.print("\n[bold green]Profiling complete![/bold green]")
 
 

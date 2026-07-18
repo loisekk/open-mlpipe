@@ -132,13 +132,13 @@ def test_load_config_production_yaml():
 @pytest.mark.unit
 def test_resolve_config_auto_task_from_yaml():
     """resolve_config should detect task from data when task=auto."""
-    from pathlib import Path
-    import tempfile
     import os
+    import tempfile
+
+    import numpy as np
 
     # Create a temp CSV file for testing
     import pandas as pd
-    import numpy as np
 
     df = pd.DataFrame({
         "feature1": np.random.normal(0, 1, 100),
