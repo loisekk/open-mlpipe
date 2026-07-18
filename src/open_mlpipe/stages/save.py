@@ -76,6 +76,17 @@ class SaveStage(Stage):
 
         return ctx
 
+    @staticmethod
+    def _to_native(val):
+        """Convert numpy types to native Python for MLflow compatibility."""
+        if isinstance(val, np.floating):
+            return float(val)
+        if isinstance(val, np.integer):
+            return int(val)
+        if isinstance(val, np.bool_):
+            return bool(val)
+        return val
+
     def _log_mlflow(self, ctx, model, metadata):
         """Log to MLflow."""
         try:
@@ -90,15 +101,16 @@ class SaveStage(Stage):
 
             with mlflow.start_run(run_name=f"{ctx.best_model_name}-v1"):
                 mlflow.log_param("model", ctx.best_model_name)
-                mlflow.log_param("task", metadata["task"])
-                mlflow.log_param("n_features", metadata["n_features"])
-                mlflow.log_param("n_train", metadata["n_train"])
+                mlflow.log_param("task", self._to_native(metadata["task"]))
+                mlflow.log_param("n_features", self._to_native(metadata["n_features"]))
+                mlflow.log_param("n_train", self._to_native(metadata["n_train"]))
 
                 for k, v in metadata["metrics"].items():
-                    if isinstance(v, int | float):
-                        mlflow.log_metric(k, v)
+                    native_v = self._to_native(v)
+                    if isinstance(native_v, int | float):
+                        mlflow.log_metric(k, native_v)
 
-                mlflow.sklearn.log_model(model, "model")
+                mlflow.sklearn.log_model(model, artifact_path="model")
                 ctx.reports["mlflow_run"] = True
         except Exception as e:
             print(f"    MLflow logging skipped: {e}")

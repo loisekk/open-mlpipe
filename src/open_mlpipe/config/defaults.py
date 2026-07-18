@@ -66,7 +66,7 @@ class SmartDefaults:
         name_looks_like_id = any(p in col.lower() for p in id_patterns)
 
         # Monotonically increasing = likely auto-increment ID
-        if pd.api.types.is_numeric_dtype(series):
+        if series.dtype in ("float64", "int64"):
             diffs = series.dropna().diff().dropna()
             is_monotonic = len(diffs) > 0 and ((diffs > 0).all() or (diffs < 0).all())
         else:
@@ -93,7 +93,7 @@ class SmartDefaults:
                 pass
 
         # Numeric
-        if pd.api.types.is_numeric_dtype(series):
+        if series.dtype in ("float64", "int64"):
             return ColumnType.NUMERIC
 
         # Categorical: string with low-to-moderate cardinality
@@ -141,7 +141,7 @@ class SmartDefaults:
         if model_family in ("tree", "forest", "boosting"):
             return ScalerType.NONE  # trees are scale-invariant
 
-        skew = abs(col.skew()) if col.dtype in ("float64", "int64") else 0
+        skew = float(col.skew())
 
         if skew > 1.0:
             return ScalerType.POWER
@@ -171,19 +171,32 @@ class SmartDefaults:
 
     @staticmethod
     def select_models(task: TaskType, n_rows: int, n_features: int) -> list[str]:
-        """Pick model candidates based on data characteristics."""
+        """Pick model candidates based on data characteristics.
+
+        Research-backed (Feldman 2020, Kösters 2024, TabArena 2025):
+        - Tree models beat distance-based on mixed-type tabular data
+        - KNN excluded from defaults (curse of dimensionality with OHE)
+        - Linear models safest for very small datasets (low variance)
+        - Complex tree/boosting added only when data can support them
+        """
         models = []
 
-        if n_rows < 1_000:
-            models.extend(["knn", "svm"])
-
         if task == TaskType.CLASSIFICATION:
-            models.extend(["logistic_regression", "random_forest", "lightgbm", "xgboost"])
-        else:
-            models.extend(["ridge", "random_forest", "lightgbm", "xgboost"])
+            models.append("logistic_regression")
 
-        if n_rows >= 1_000:
-            models.append("catboost")
+            # Add tree/boosting only when data is sufficient
+            if n_rows >= 500:
+                models.extend(["random_forest", "lightgbm", "xgboost"])
+                if n_rows >= 1_000:
+                    models.append("catboost")
+            if n_rows < 1_000:
+                models.append("svm")
+        else:
+            models.append("ridge")
+            if n_rows >= 500:
+                models.extend(["random_forest", "lightgbm", "xgboost"])
+                if n_rows >= 1_000:
+                    models.append("catboost")
 
         return models
 
@@ -212,7 +225,7 @@ class SmartDefaults:
     @staticmethod
     def default_scoring(task: TaskType) -> list[str]:
         if task == TaskType.CLASSIFICATION:
-            return ["accuracy", "f1_macro", "roc_auc_ovr", "precision_macro", "recall_macro"]
+            return ["accuracy", "f1_macro", "roc_auc_ovr"]
         return ["neg_root_mean_squared_error", "neg_mean_absolute_error", "r2"]
 
     # ── Skew Detection ──

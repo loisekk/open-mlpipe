@@ -25,6 +25,14 @@ class DataLoaderStage(Stage):
             df = df.head(config.data.max_rows)
 
         ctx.raw_data = df
+
+        # Warn on very small datasets
+        if len(df) < 500:
+            ctx.metrics["small_data_warning"] = (
+                f"Dataset has only {len(df)} rows. "
+                "Consider collecting more data for reliable results. "
+                "Pipeline will use simpler models with strong regularization."
+            )
         ctx.clean_data = df.copy()
 
         # Detect target

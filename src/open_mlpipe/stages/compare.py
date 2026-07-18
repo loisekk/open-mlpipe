@@ -67,6 +67,7 @@ class CompareStage(Stage):
         X_train = ctx.X_train
         y_train = ctx.y_train
         config = ctx.config
+        assert config is not None, "PipelineContext.config must not be None"
 
         task = ctx.task_type
         scoring = config.model_selection.scoring or SmartDefaults.default_scoring(task)
@@ -312,8 +313,13 @@ class CompareStage(Stage):
 
         if name == "svm":
             if is_cls:
+                # SVC(probability=True) deprecated in sklearn 1.9 — use CalibratedClassifierCV wrapper
+                from sklearn.calibration import CalibratedClassifierCV
                 from sklearn.svm import SVC
-                return SVC(probability=True, class_weight="balanced", kernel="rbf")
+                return CalibratedClassifierCV(
+                    SVC(class_weight="balanced", kernel="rbf", random_state=42),
+                    cv=5,
+                )
             else:
                 from sklearn.svm import SVR
                 return SVR(kernel="rbf", epsilon=0.1)

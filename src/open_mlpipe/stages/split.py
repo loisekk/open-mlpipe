@@ -22,8 +22,8 @@ class SplitStage(Stage):
         X = df.drop(columns=[target])
         y = df[target]
 
-        # Encode target if classification and string
-        if ctx.task_type == TaskType.CLASSIFICATION and y.dtype == "object":
+        # Encode target if classification and string/category
+        if ctx.task_type == TaskType.CLASSIFICATION and y.dtype in ("object", "category"):
             from sklearn.preprocessing import LabelEncoder
             le = LabelEncoder()
             y = pd.Series(le.fit_transform(y), name=target)

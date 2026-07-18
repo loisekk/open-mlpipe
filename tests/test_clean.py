@@ -38,6 +38,7 @@ def test_execute_removes_duplicates(sample_dataframe):
     stage = CleanStage()
     result = stage.execute(ctx)
 
+    assert result.clean_data is not None
     assert len(result.clean_data) < len(sample_dataframe)
 
 
@@ -56,6 +57,7 @@ def test_execute_drops_rows_with_null_target(sample_dataframe_regression):
     stage = CleanStage()
     result = stage.execute(ctx)
 
+    assert result.clean_data is not None
     assert result.clean_data["target"].isnull().sum() == 0
 
 
@@ -80,6 +82,7 @@ def test_execute_drops_id_like_columns(sample_dataframe_regression):
     stage = CleanStage()
     result = stage.execute(ctx)
 
+    assert result.clean_data is not None
     assert "id" not in result.clean_data.columns
 
 

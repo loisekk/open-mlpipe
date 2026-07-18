@@ -29,6 +29,7 @@ def test_eda_report_contains_quality_key(loaded_context):
     stage = EDALoaderStage()
     result = stage.execute(loaded_context)
 
+    assert result.eda_report is not None
     assert "quality" in result.eda_report
     assert isinstance(result.eda_report["quality"], dict)
 
@@ -50,9 +51,7 @@ def test_execute_handles_column_name_cleaning():
         "Salary $": [50000.0, 60000.0, 70000.0],
         "target": [100.0, 200.0, 300.0],
     })
-    config = PipelineConfig(data=DataConfig(path="dummy.csv", target="target"))
     ctx = PipelineContext(
-        config=config,
         clean_data=df.copy(),
         target_column="target",
         column_types={},
@@ -68,6 +67,7 @@ def test_execute_handles_column_name_cleaning():
     stage = EDALoaderStage()
     result = stage.execute(ctx)
 
+    assert result.clean_data is not None
     assert "first_name" in result.clean_data.columns
     assert "last_name" in result.clean_data.columns
     assert "age" in result.clean_data.columns

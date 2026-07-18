@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import time
-
+from open_mlpipe.config.schema import DataConfig
 # Fix Windows cp1252 UnicodeDecodeError in joblib/loky subprocesses
 # Must be set before any joblib/sklearn imports
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -48,6 +48,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from open_mlpipe import __version__
+
 console = Console()
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -70,7 +72,7 @@ def print_banner():
 
     from open_mlpipe import __version__
     if sys.platform == "win32":
-        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
     banner = BANNER_TEMPLATE.format(version=__version__)
     console.print(banner)
     console.print(f"[bold orange1]>_ openml v{__version__}[/bold orange1]")
@@ -131,12 +133,29 @@ def print_completion_summary(ctx, start_time):
 
 
 @click.group(invoke_without_command=True)
-@click.version_option(package_name="open-mlpipe")
+@click.version_option(prog_name="open-mlpipe", version=__version__)
 @click.pass_context
 def main(ctx):
     """open-mlpipe — Production-level automated ML pipeline."""
     if ctx.invoked_subcommand is None:
         interactive_mode()
+
+
+@main.command()
+@click.option("--data", "-d", required=True, help="Path to data file or directory")
+@click.option("--target", "-t", default=None, help="Target column name")
+@click.option("--project", "-p", default="openml", help="Project name")
+def run(data: str, target: str | None, project: str) -> None:
+    """Run the full ML pipeline — compare, tune, evaluate, save."""
+    _run_pipeline(data, target, project)
+
+
+@main.command()
+@click.option("--data", "-d", required=True, help="Path to data file")
+@click.option("--target", "-t", default=None, help="Target column name")
+def profile(data: str, target: str | None) -> None:
+    """Profile a dataset — EDA report with quality, distributions, stats."""
+    _profile_data(data, target)
 
 
 def interactive_mode():
@@ -280,13 +299,13 @@ def _scan_and_show_datasets(path):
     # If it's a file, show its columns
     if p.is_file():
         try:
-            df = pd.read_csv(p, nrows=5)
+            df_full = pd.read_csv(p, low_memory=False)
             console.print(f"\n[bold cyan]Dataset: {p.name}[/bold cyan]")
-            console.print(f"  Rows: {len(pd.read_csv(p)):,}")
-            console.print(f"  Columns ({len(df.columns)}):")
-            for col in df.columns:
-                dtype = df[col].dtype
-                sample = df[col].iloc[0] if len(df) > 0 else "N/A"
+            console.print(f"  Rows: {len(df_full):,}")
+            console.print(f"  Columns ({len(df_full.columns)}):")
+            for col in df_full.columns:
+                dtype = df_full[col].dtype
+                sample = df_full[col].iloc[0] if len(df_full) > 0 else "N/A"
                 console.print(f"    - [green]{col}[/green] ({dtype}) [dim]sample: {sample}[/dim]")
             console.print()
             return
@@ -310,14 +329,19 @@ def _scan_and_show_datasets(path):
             for i, f in enumerate(csv_files[:10], 1):  # Show max 10
                 try:
                     df = pd.read_csv(f, nrows=100, low_memory=False)
-                    rows = len(pd.read_csv(f, low_memory=False))
+                    # Count rows without full parse (fast line count)
+                    try:
+                        with open(f, encoding="utf-8") as fh:
+                            row_count = sum(1 for _ in fh) - 1  # subtract header
+                    except Exception:
+                        row_count = len(pd.read_csv(f, nrows=1000, low_memory=False))
                     cols = len(df.columns)
 
                     # Guess target candidates (numeric columns)
                     num_cols = df.select_dtypes(include=["number"]).columns.tolist()
                     target_hint = ", ".join(num_cols[:3]) if num_cols else "None"
 
-                    table.add_row(str(i), f.name, str(rows), str(cols), target_hint)
+                    table.add_row(str(i), f.name, str(row_count), str(cols), target_hint)
                 except Exception:
                     table.add_row(str(i), f.name, "?", "?", "?")
 
@@ -329,7 +353,7 @@ def _scan_and_show_datasets(path):
         console.print(f"\n[yellow]Path not found: {path}[/yellow]")
 
 
-def _run_pipeline(data, target=None):
+def _run_pipeline(data, target=None, project="openml"):
     """Run the ML pipeline."""
     from pathlib import Path
 
@@ -350,7 +374,7 @@ def _run_pipeline(data, target=None):
 
     start_time = time.time()
     pipeline_config = build_level1_config(data, target)
-    pipeline_config.project = "openml"
+    pipeline_config.project = project
 
     runner = PipelineRunner(pipeline_config)
     ctx = runner.run()
@@ -367,7 +391,7 @@ def _profile_data(data, target=None):
 
     config = PipelineConfig(
         project="profile",
-        data={"path": data, "target": target},
+        data=DataConfig(path=data, target=target),
     )
 
     ctx = PipelineContext(config=config)

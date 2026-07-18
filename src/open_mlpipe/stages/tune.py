@@ -182,6 +182,9 @@ class TuneStage(Stage):
         model = comparator._build_single(model_name, is_cls)
         if model is not None:
             try:
+                # CalibratedClassifierCV wraps SVC — params need estimator__ prefix
+                if model.__class__.__name__ == "CalibratedClassifierCV":
+                    params = {f"estimator__{k}": v for k, v in params.items()}
                 model.set_params(**params)
             except Exception:
                 pass  # Some params may not be settable

@@ -9,6 +9,7 @@ from tempfile import mkdtemp
 import numpy as np
 import pandas as pd
 import pytest
+
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
@@ -167,6 +168,9 @@ def loaded_context(
     """Context after DataLoaderStage: raw_data, clean_data, column metadata."""
     df = sample_dataframe_regression
     ctx = PipelineContext(raw_data=df, clean_data=df.copy(), config=base_config)
+    # ensure config is present for static analyzers / optional config implementations
+    if ctx.config is None:
+        ctx.config = base_config
     ctx.config.data.target = "target"
     ctx.task_type = TaskType.REGRESSION
     ctx.target_column = "target"
@@ -215,18 +219,9 @@ def eda_context(
             "test": ["Pearson", "Pearson", "ANOVA"],
         }),
     }
-    ctx.correlation_matrix = pd.DataFrame(
-        np.array([[1.0, 0.1, 0.5], [0.1, 1.0, 0.6], [0.5, 0.6, 1.0]]),
-        columns=["feat_a", "feat_b", "target"],
-        index=["feat_a", "feat_b", "target"],
-    )
-    ctx.correlation_matrix = pd.DataFrame(
-        {"feat_a_corr": [1.0, 0.2, 0.6], "feat_b_corr": [0.2, 1.0, 0.9]},
-        index=["feat_a", "feat_b", "target"],
-    )["feat_b_corr"].to_frame().rename(columns={"feat_b_corr": "feat_b_corr"})
+    # Build a correlation matrix from random data for test use
     corr_rows = rng.normal(0, 1, (len(df.columns), len(df.columns)))
-    corr_df = pd.DataFrame(corr_rows, columns=df.columns, index=df.columns)
-    ctx.correlation_matrix = corr_df
+    ctx.correlation_matrix = pd.DataFrame(corr_rows, columns=df.columns, index=df.columns)
     ctx.statistical_tests = pd.DataFrame({
         "feature": ["feat_a", "feat_b", "cat_x"],
         "p_value": [0.01, 0.001, 0.15],
@@ -256,6 +251,7 @@ def split_context(
 ) -> PipelineContext:
     """Context after SplitStage: X_train, X_test, y_train, y_test populated."""
     df = clean_context.clean_data
+    assert df is not None, "clean_data must be set before split_context"
     X = df.drop(columns=["target"])
     y = df["target"]
     from sklearn.model_selection import train_test_split
@@ -294,7 +290,9 @@ def preprocessed_context(
         ],
         remainder="passthrough",
     )
-    preprocessor.fit(ctx.X_train)
+    assert ctx.X_train is not None, "X_train must be set before preprocessor fitting"
+    X_train = ctx.X_train
+    preprocessor.fit(X_train)
     ctx.preprocessor = preprocessor
     return ctx
 
@@ -309,15 +307,15 @@ def compared_context_regression(
         ("pre", ctx.preprocessor),
         ("model", Ridge(alpha=1.0)),
     ])
-    model.fit(ctx.X_train, ctx.y_train)
+    assert ctx.X_train is not None, "X_train must be set before model fitting"
+    X_train = ctx.X_train
+    model.fit(X_train, ctx.y_train)
     ctx.baseline_models = {"ridge": model}
     ctx.best_model_name = "ridge"
     ctx.best_model = model
-    ctx.metrics["model_comparison"] = {
-        "ridge_r2": 0.85,
-        "ridge_mae": 2.3,
-        "ridge_rmse": 3.1,
-    }
+    ctx.metrics["ridge_r2"] = 0.85
+    ctx.metrics["ridge_mae"] = 2.3
+    ctx.metrics["ridge_rmse"] = 3.1
     return ctx
 
 
@@ -329,7 +327,7 @@ def tuned_context_regression(
     ctx = compared_context_regression
     ctx.tuned_model = ctx.best_model
     ctx.metrics["tuned_best_value"] = 0.87
-    ctx.metrics["tuned_best_params"] = {"alpha": 1.0}
+    ctx.metrics["tuned_best_params_alpha"] = 1.0
     return ctx
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import yaml
 
 from open_mlpipe.config.defaults import SmartDefaults
-from open_mlpipe.config.schema import PipelineConfig
+from open_mlpipe.config.schema import DataConfig, ModelSelectionConfig, PipelineConfig, TuningConfig
 from open_mlpipe.utils.typing import TaskType
 
 
@@ -37,19 +37,19 @@ def build_level1_config(data_path: str, target: str | None = None) -> PipelineCo
         task=task.value,
         primary_metric=SmartDefaults.default_metric(task),
         level=1,
-        data={
-            "path": data_path,
-            "target": target,
-            "test_size": 0.2,
-            "random_state": 42,
-        },
-        model_selection={
-            "candidates": "auto",
-            "scoring": SmartDefaults.default_scoring(task),
-        },
-        tuning={
-            "n_trials": str(SmartDefaults.allocate_tuning_budget(n_rows, n_features)),
-        },
+        data=DataConfig(
+            path=data_path,
+            target=target,
+            test_size=0.2,
+            random_state=42,
+        ),
+        model_selection=ModelSelectionConfig(
+            candidates="auto",
+            scoring=SmartDefaults.default_scoring(task),
+        ),
+        tuning=TuningConfig(
+            n_trials=SmartDefaults.allocate_tuning_budget(n_rows, n_features),
+        ),
     )
 
 
@@ -73,7 +73,8 @@ def resolve_config(config: PipelineConfig, df=None) -> PipelineConfig:
         target = config.data.target
         n_rows = len(df)
         n_features = len(df.columns) - (1 if target and target in df.columns else 0)
-        config.model_selection.candidates = SmartDefaults.select_models(task, n_rows, n_features)
+        if isinstance(config.model_selection.candidates, str) and config.model_selection.candidates == "auto":
+            config.model_selection.candidates = SmartDefaults.select_models(task, n_rows, n_features)
 
     if isinstance(config.tuning.n_trials, str) and config.tuning.n_trials == "auto":
         if df is not None:
