@@ -288,8 +288,8 @@ def _scan_and_show_datasets(path):
             
             for i, f in enumerate(csv_files[:10], 1):  # Show max 10
                 try:
-                    df = pd.read_csv(f, nrows=100)
-                    rows = len(pd.read_csv(f))
+                    df = pd.read_csv(f, nrows=100, low_memory=False)
+                    rows = len(pd.read_csv(f, low_memory=False))
                     cols = len(df.columns)
                     
                     # Guess target candidates (numeric columns)
