@@ -1,9 +1,10 @@
-"""CLI entry point for mlpipe."""
+"""CLI entry point for open-mlpipe."""
 
 from __future__ import annotations
 
 import os
 import sys
+import time
 
 # Fix Windows cp1252 UnicodeDecodeError in joblib/loky subprocesses
 # Must be set before any joblib/sklearn imports
@@ -27,12 +28,103 @@ if sys.platform == "win32":
 
 import click
 from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from rich.columns import Columns
 
 console = Console()
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ASCII ART BANNER
+# ═══════════════════════════════════════════════════════════════════════════
+
+BANNER = """
+[bold blue]
+  ╔═══════════════════════════════════════════════════════════════╗
+  ║                                                               ║
+  ║   ██████╗ ██╗  ██╗██╗██╗     ██████╗     ███╗   ███╗ ██████╗  ║
+  ║  ██╔═══██╗██║  ██║██║██║     ██╔══██╗    ████╗ ████║██╔═══██╗ ║
+  ║  ██║   ██║███████║██║██║     ██║  ██║    ██╔████╔██║██║   ██║ ║
+  ║  ██║   ██║██╔══██║██║██║     ██║  ██║    ██║╚██╔╝██║██║   ██║ ║
+  ║  ╚██████╔╝██║  ██║██║███████╗██████╔╝    ██║ ╚═╝ ██║╚██████╔╝ ║
+  ║   ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═════╝     ╚═╝     ╚═╝ ╚═════╝  ║
+  ║                                                               ║
+  ║          [bold cyan]Production ML Pipeline[/bold cyan]                       ║
+  ║          [dim]v1.0.0 — 14+ Models — One Line[/dim]              ║
+  ║                                                               ║
+  ╚═══════════════════════════════════════════════════════════════╝
+[/bold blue]"""
+
+BANNER_SIMPLE = """
+[bold blue]>>> open-mlpipe v1.0.0[/bold blue]
+[dim]Production ML Pipeline — 14+ Models — One Line[/dim]
+"""
+
+
+def print_banner():
+    """Print the ASCII art banner."""
+    console.print(BANNER_SIMPLE)
+    console.print()
+
+
+def print_completion_summary(ctx, start_time):
+    """Print a beautiful completion summary with stats."""
+    elapsed = time.time() - start_time
+
+    # Create results table
+    table = Table(
+        title="Pipeline Complete!",
+        show_header=True,
+        header_style="bold cyan",
+        border_style="blue",
+    )
+    table.add_column("Metric", style="bold")
+    table.add_column("Value", style="green")
+
+    # Basic info
+    table.add_row("Task", str(ctx.task_type).split(".")[-1])
+    table.add_row("Target", str(ctx.target_column))
+    table.add_row("Best Model", str(ctx.best_model_name))
+    table.add_row("Time", f"{elapsed:.1f}s")
+
+    # Metrics
+    if ctx.metrics:
+        for k, v in ctx.metrics.items():
+            if k.startswith("test_") and isinstance(v, (int, float)):
+                if isinstance(v, float):
+                    table.add_row(k, f"{v:.4f}")
+                else:
+                    table.add_row(k, str(v))
+
+    console.print()
+    console.print(table)
+
+    # Model saved
+    model_path = ctx.reports.get("model_path", "N/A")
+    if model_path and model_path != "N/A":
+        console.print()
+        console.print(
+            Panel(
+                f"[green]Model saved to:[/green] [bold]{model_path}[/bold]",
+                border_style="green",
+            )
+        )
+
+    # Quick prediction example
+    console.print()
+    console.print("[dim]Quick prediction:[/dim]")
+    console.print(
+        "[dim]  import joblib[/dim]\n"
+        "[dim]  model = joblib.load('{model_path}')[/dim]\n"
+        "[dim]  predictions = model.predict(new_data)[/dim]".format(
+            model_path=model_path
+        )
+    )
+
 
 @click.group()
-@click.version_option(package_name="mlpipe")
+@click.version_option(package_name="open-mlpipe")
 def main():
     """open-mlpipe — Production-level automated ML pipeline."""
     pass
@@ -43,7 +135,7 @@ def main():
 @click.option("--target", "-t", default=None, help="Target column name (auto-detected if not given)")
 @click.option("--level", "-l", default=1, type=click.Choice(["1", "2", "3"]), help="Automation level")
 @click.option("--config", "-c", default=None, help="Path to YAML config file (for level 2)")
-@click.option("--project", "-p", default="mlpipe-run", help="Project name")
+@click.option("--project", "-p", default="open-mlpipe", help="Project name")
 @click.option("--deploy/--no-deploy", default=False, help="Generate deployment artifacts")
 def run(data, target, level, config, project, deploy):
     """Run the full ML pipeline."""
@@ -51,7 +143,10 @@ def run(data, target, level, config, project, deploy):
     from open_mlpipe.core.pipeline import PipelineRunner
     from open_mlpipe.utils.io import load_data
 
+    print_banner()
+
     level = int(level)
+    start_time = time.time()
 
     if config:
         console.print(f"[bold]Loading config from {config}...[/bold]")
@@ -79,8 +174,7 @@ def run(data, target, level, config, project, deploy):
     runner = PipelineRunner(pipeline_config)
     ctx = runner.run()
 
-    console.print("\n[bold green]Pipeline complete![/bold green]")
-    console.print(f"Model saved to: {ctx.reports.get('model_path', 'N/A')}")
+    print_completion_summary(ctx, start_time)
 
 
 @main.command()
@@ -93,6 +187,9 @@ def profile(data, target):
     from open_mlpipe.stages.eda import EDALoaderStage
     from open_mlpipe.stages.load import DataLoaderStage
 
+    print_banner()
+    console.print(f"[bold]Profiling {data}...[/bold]\n")
+
     config = PipelineConfig(
         project="profile",
         data={"path": data, "target": target},
@@ -104,7 +201,7 @@ def profile(data, target):
 
     # Print EDA summary
     if ctx.eda_report:
-        console.print("\n[bold cyan]═══ EDA Report ═══[/bold cyan]\n")
+        console.print("\n[bold cyan]=== EDA Report ===[/bold cyan]\n")
 
         quality = ctx.eda_report.get("quality", {})
         if quality.get("missing_count"):
@@ -136,6 +233,8 @@ def profile(data, target):
             for _, row in ctx.vif_scores.head(5).iterrows():
                 flag = " ⚠️" if row["VIF"] > 10 else ""
                 console.print(f"  {row['feature']}: {row['VIF']:.2f}{flag}")
+
+        console.print("\n[bold green]Profiling complete![/bold green]")
 
 
 if __name__ == "__main__":
