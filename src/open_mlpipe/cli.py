@@ -56,32 +56,27 @@ console = Console()
 # ASCII ART BANNER
 # ═══════════════════════════════════════════════════════════════════════════
 
-BANNER = """
+BANNER = r"""
 [bold blue]
-  ╔═══════════════════════════════════════════════════════════════╗
-  ║                                                               ║
-  ║   ██████╗ ██╗  ██╗██╗██╗     ██████╗     ███╗   ███╗ ██████╗  ║
-  ║  ██╔═══██╗██║  ██║██║██║     ██╔══██╗    ████╗ ████║██╔═══██╗ ║
-  ║  ██║   ██║███████║██║██║     ██║  ██║    ██╔████╔██║██║   ██║ ║
-  ║  ██║   ██║██╔══██║██║██║     ██║  ██║    ██║╚██╔╝██║██║   ██║ ║
-  ║  ╚██████╔╝██║  ██║██║███████╗██████╔╝    ██║ ╚═╝ ██║╚██████╔╝ ║
-  ║   ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═════╝     ╚═╝     ╚═╝ ╚═════╝  ║
-  ║                                                               ║
-  ║          [bold cyan]Production ML Pipeline[/bold cyan]                       ║
-  ║          [dim]v1.0.0 — 14+ Models — One Line[/dim]              ║
-  ║                                                               ║
-  ╚═══════════════════════════════════════════════════════════════╝
+ ____   ___   ____  ____  ____  ____  ____  ____  ____  ____  ____  ____  ____  ____ 
+|    \ / _ \ |  _ \|  _ \| ___||  _ \| ___||  _ \| ___||  _ \| ___||  _ \| ___||  _ \
+|  O  | | | || | | || | | ||___ \| | | ||___ \| | | ||___ \| | | ||___ \| | | || | | |
+|  ___| |_| || |_| || |_| | ___) | |_| | ___) | |_| | ___) | |_| | ___) | |_| || |_| |
+|_|    \___/ |____/ |____/ |____/ \___/ |____/ |____/ |____/ |____/ |____/ |____/|____/
+
+            [bold cyan]Production ML Pipeline[/bold cyan]
+            [dim]v1.0.2 - 14+ Models - One Line[/dim]
 [/bold blue]"""
 
 BANNER_SIMPLE = """
-[bold blue]>>> open-mlpipe v1.0.0[/bold blue]
+[bold blue]>>> open-mlpipe v1.0.2[/bold blue]
 [dim]Production ML Pipeline — 14+ Models — One Line[/dim]
 """
 
 
 def print_banner():
     """Print the ASCII art banner."""
-    console.print(BANNER_SIMPLE)
+    console.print(BANNER)
     console.print()
 
 
@@ -140,117 +135,174 @@ def print_completion_summary(ctx, start_time):
     )
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(package_name="open-mlpipe")
-def main():
+@click.pass_context
+def main(ctx):
     """open-mlpipe — Production-level automated ML pipeline."""
-    pass
+    if ctx.invoked_subcommand is None:
+        interactive_mode()
 
 
-@main.command()
-@click.option("--data", "-d", default=None, help="Path to data file (CSV, Parquet, Excel)")
-@click.option("--target", "-t", default=None, help="Target column name (auto-detected if not given)")
-@click.option("--level", "-l", default=1, type=click.Choice(["1", "2", "3"]), help="Automation level")
-@click.option("--config", "-c", default=None, help="Path to YAML config file (for level 2)")
-@click.option("--project", "-p", default="open-mlpipe", help="Project name")
-@click.option("--deploy/--no-deploy", default=False, help="Generate deployment artifacts")
-def run(data, target, level, config, project, deploy):
-    """Run the full ML pipeline."""
-    from open_mlpipe.config.resolver import build_level1_config, load_config, resolve_config
-    from open_mlpipe.core.pipeline import PipelineRunner
-    from open_mlpipe.utils.io import load_data
-
+def interactive_mode():
+    """Interactive mode - like Qwen Code."""
     print_banner()
+    
+    console.print("[dim]Tips: Type 'run' to start pipeline, 'profile' for EDA, 'help' for commands, 'quit' to exit[/dim]\n")
+    
+    while True:
+        try:
+            user_input = console.input("[bold green]> [/bold green]").strip()
+            
+            if not user_input:
+                continue
+            
+            if user_input.lower() in ("quit", "exit", "q"):
+                console.print("\n[bold cyan]Goodbye! Happy ML! :)[/bold cyan]\n")
+                break
+            
+            if user_input.lower() == "help":
+                console.print("""
+[bold]Available Commands:[/bold]
 
-    level = int(level)
+  [green]run[/green]      - Run the full ML pipeline
+  [green]profile[/green]  - Profile a dataset (EDA only)
+  [green]help[/green]     - Show this help
+  [green]quit[/green]     - Exit
+
+[bold]Quick Start:[/bold]
+  > run --data dataset.csv --target column_name
+  > profile --data dataset.csv
+""")
+                continue
+            
+            if user_input.lower() == "run":
+                console.print("\n[bold]Run Pipeline[/bold]")
+                console.print("[dim]Enter your data file path:[/dim]")
+                data = console.input("[bold green]> data: [/bold green]").strip()
+                if not data:
+                    console.print("[red]No data file provided[/red]")
+                    continue
+                console.print("[dim]Enter target column (or press Enter for auto-detect):[/dim]")
+                target = console.input("[bold green]> target: [/bold green]").strip() or None
+                
+                console.print(f"\n[bold]Starting pipeline for {data}...[/bold]\n")
+                _run_pipeline(data, target)
+                continue
+            
+            if user_input.lower() == "profile":
+                console.print("\n[bold]Profile Dataset[/bold]")
+                console.print("[dim]Enter your data file path:[/dim]")
+                data = console.input("[bold green]> data: [/bold green]").strip()
+                if not data:
+                    console.print("[red]No data file provided[/red]")
+                    continue
+                
+                console.print(f"\n[bold]Profiling {data}...[/bold]\n")
+                _profile_data(data, None)
+                continue
+            
+            # Try to parse as a command
+            parts = user_input.split()
+            if parts[0].lower() == "run" and len(parts) > 1:
+                # Parse run command arguments
+                data = None
+                target = None
+                for i, part in enumerate(parts[1:], 1):
+                    if part in ("--data", "-d") and i + 1 < len(parts):
+                        data = parts[i + 1]
+                    elif part in ("--target", "-t") and i + 1 < len(parts):
+                        target = parts[i + 1]
+                
+                if data:
+                    console.print(f"\n[bold]Starting pipeline for {data}...[/bold]\n")
+                    _run_pipeline(data, target)
+                else:
+                    console.print("[red]Please provide --data parameter[/red]")
+                continue
+            
+            if parts[0].lower() == "profile" and len(parts) > 1:
+                data = None
+                for i, part in enumerate(parts[1:], 1):
+                    if part in ("--data", "-d") and i + 1 < len(parts):
+                        data = parts[i + 1]
+                
+                if data:
+                    console.print(f"\n[bold]Profiling {data}...[/bold]\n")
+                    _profile_data(data, None)
+                else:
+                    console.print("[red]Please provide --data parameter[/red]")
+                continue
+            
+            console.print(f"[red]Unknown command: {user_input}[/red]")
+            console.print("[dim]Type 'help' for available commands[/dim]")
+            
+        except KeyboardInterrupt:
+            console.print("\n[bold cyan]Goodbye! Happy ML! :)[/bold cyan]\n")
+            break
+        except EOFError:
+            break
+
+
+def _run_pipeline(data, target=None):
+    """Run the ML pipeline."""
+    from open_mlpipe.config.resolver import build_level1_config
+    from open_mlpipe.core.pipeline import PipelineRunner
+    
     start_time = time.time()
-
-    if config:
-        console.print(f"[bold]Loading config from {config}...[/bold]")
-        pipeline_config = load_config(config)
-        # Load data to resolve auto values
-        df = load_data(pipeline_config.data.path)
-        pipeline_config = resolve_config(pipeline_config, df)
-    elif data:
-        if level == 1:
-            console.print(f"[bold]Level 1: Zero-touch pipeline for {data}[/bold]")
-            pipeline_config = build_level1_config(data, target)
-        else:
-            console.print("[red]Level 2 requires --config[/red]")
-            return
-    else:
-        console.print("[red]Either --data or --config is required[/red]")
-        return
-
-    pipeline_config.project = project
-    if not config:
-        pipeline_config.level = level
-    if deploy:
-        pipeline_config.deployment.enabled = True
-
+    pipeline_config = build_level1_config(data, target)
+    pipeline_config.project = "open-mlpipe"
+    
     runner = PipelineRunner(pipeline_config)
     ctx = runner.run()
-
+    
     print_completion_summary(ctx, start_time)
 
 
-@main.command()
-@click.option("--data", "-d", required=True, help="Path to data file")
-@click.option("--target", "-t", default=None, help="Target column name")
-def profile(data, target):
-    """Profile a dataset (EDA only, no model training)."""
+def _profile_data(data, target=None):
+    """Profile a dataset."""
     from open_mlpipe.config.schema import PipelineConfig
     from open_mlpipe.core.context import PipelineContext
     from open_mlpipe.stages.eda import EDALoaderStage
     from open_mlpipe.stages.load import DataLoaderStage
-
-    print_banner()
-    console.print(f"[bold]Profiling {data}...[/bold]\n")
-
+    
     config = PipelineConfig(
         project="profile",
         data={"path": data, "target": target},
     )
-
+    
     ctx = PipelineContext(config=config)
     ctx = DataLoaderStage().execute(ctx)
     ctx = EDALoaderStage().execute(ctx)
-
-    # Print EDA summary
+    
     if ctx.eda_report:
         console.print("\n[bold cyan]=== EDA Report ===[/bold cyan]\n")
-
+        
         quality = ctx.eda_report.get("quality", {})
         if quality.get("missing_count"):
             console.print("[bold]Missing Values:[/bold]")
             for col, count in quality["missing_count"].items():
                 pct = quality["missing_pct"].get(col, 0)
                 console.print(f"  {col}: {count} ({pct}%)")
-
+        
         if quality.get("n_duplicates"):
             console.print(f"\n[bold]Duplicates:[/bold] {quality['n_duplicates']} ({quality['duplicate_pct']}%)")
-
+        
         if quality.get("outliers"):
             console.print("\n[bold]Outliers:[/bold]")
             for col, info in quality["outliers"].items():
                 console.print(f"  {col}: {info['count']} ({info['pct']}%)")
-
+        
         dist = ctx.eda_report.get("distributions", {})
         if dist.get("highly_skewed"):
             console.print(f"\n[bold]Highly Skewed:[/bold] {dist['highly_skewed']}")
-
+        
         if ctx.statistical_tests is not None:
             console.print("\n[bold]Statistical Tests (significant features):[/bold]")
             sig = ctx.statistical_tests[ctx.statistical_tests["significant"]]
             for _, row in sig.iterrows():
                 console.print(f"  {row['feature']}: {row['test']} (p={row['p_value']:.4f})")
-
-        if ctx.vif_scores is not None:
-            console.print("\n[bold]VIF (Variance Inflation Factor):[/bold]")
-            for _, row in ctx.vif_scores.head(5).iterrows():
-                flag = " ⚠️" if row["VIF"] > 10 else ""
-                console.print(f"  {row['feature']}: {row['VIF']:.2f}{flag}")
-
+        
         console.print("\n[bold green]Profiling complete![/bold green]")
 
 
