@@ -57,7 +57,6 @@ console = Console()
 # ═══════════════════════════════════════════════════════════════════════════
 
 BANNER = """
-[bold blue]
 +=============================================================================+
 |                                                                             |
 |   ____   ___   ____  ____  ____  ____  ____  ____  ____  ____  ____  ____  |
@@ -66,11 +65,11 @@ BANNER = """
 |  |  __/| |_| || |_| || |_| | ___) | |_| | ___) | |_| | ___) | |_| | ___) | |_| |
 |  |_|    \\___/ |____/ |____/ |____/ \\___/ |____/ |____/ |____/ |____/ |____/ |____/ |
 |                                                                             |
-|              [bold cyan]>_ open-mlpipe v1.0.2[/bold cyan]                                    |
-|              [dim]Production ML Pipeline | 14+ Models | One Line[/dim]             |
+|              >_ open-mlpipe v1.0.2                                          |
+|              Production ML Pipeline | 14+ Models | One Line                 |
 |                                                                             |
 +=============================================================================+
-[/bold blue]"""
+"""
 
 BANNER_SIMPLE = """
 [bold blue]>>> open-mlpipe v1.0.2[/bold blue]
@@ -80,8 +79,12 @@ BANNER_SIMPLE = """
 
 def print_banner():
     """Print the ASCII art banner."""
-    console.print(BANNER)
-    console.print()
+    # Force UTF-8 output for Unicode characters
+    import sys
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding='utf-8')
+    print(BANNER)
+    print()
 
 
 def print_completion_summary(ctx, start_time):
