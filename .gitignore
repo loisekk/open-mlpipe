@@ -45,6 +45,10 @@ site/
 # Jupyter
 .ipynb_checkpoints/
 
+# MLflow
+mlflow.db
+mlruns/
+
 # Blog files (not needed in repo)
 blog-*.md
 
