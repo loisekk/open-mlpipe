@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-mlpipe"
-version = "1.0.3"
+version = "1.0.4"
 description = "Production-level automated ML pipeline — from raw data to deployed model in one line"
 readme = "README.md"
 license = "MIT"
@@ -56,7 +56,7 @@ Repository = "https://github.com/yashb/mlpipe"
 Issues = "https://github.com/yashb/mlpipe/issues"
 
 [project.scripts]
-open-mlpipe = "open_mlpipe.cli:main"
+openml = "open_mlpipe.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/open_mlpipe"]

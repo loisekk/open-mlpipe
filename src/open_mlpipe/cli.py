@@ -57,12 +57,16 @@ console = Console()
 # ═══════════════════════════════════════════════════════════════════════════
 
 BANNER = """
+[bold orange1]
  ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ███╗██╗     ┌──────────────────────────────────────────────────────────┐
 ██╔═══██╗██╔══██╗██╔════╝████╗  ██║████╗ ████║██║     │ >_ OpenML Code (v1.0.0)                                  │
 ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██╔████╔██║██║     │                                                          │
 ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║╚██╔╝██║██║     │ API Key | openml-python (pip) (/model to change)         │
 ╚██████╔╝██║     ███████╗██║ ╚████║██║ ╚═╝ ██║███████╗│ ~                                                        │
  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚══════╝└──────────────────────────────────────────────────────────┘
+[/bold orange1]
+[bold orange1]>_ openml v1.0.3[/bold orange1]
+[dim]Production ML Pipeline | 14+ Models | One Line[/dim]
 """
 
 BANNER_SIMPLE = """
@@ -310,12 +314,25 @@ def _scan_and_show_datasets(path):
 
 def _run_pipeline(data, target=None):
     """Run the ML pipeline."""
+    from pathlib import Path
     from open_mlpipe.config.resolver import build_level1_config
     from open_mlpipe.core.pipeline import PipelineRunner
     
+    p = Path(data)
+    
+    # If it's a directory, find the first CSV file
+    if p.is_dir():
+        csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
+        if csv_files:
+            data = str(csv_files[0])
+            console.print(f"[dim]Using first dataset: {csv_files[0].name}[/dim]")
+        else:
+            console.print(f"[red]No CSV/Excel files found in {data}[/red]")
+            return
+    
     start_time = time.time()
     pipeline_config = build_level1_config(data, target)
-    pipeline_config.project = "open-mlpipe"
+    pipeline_config.project = "openml"
     
     runner = PipelineRunner(pipeline_config)
     ctx = runner.run()
