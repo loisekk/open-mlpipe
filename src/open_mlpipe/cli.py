@@ -184,6 +184,10 @@ def interactive_mode():
                 if not data:
                     console.print("[red]No data file provided[/red]")
                     continue
+                
+                # Scan directory for datasets
+                _scan_and_show_datasets(data)
+                
                 console.print("[dim]Enter target column (or press Enter for auto-detect):[/dim]")
                 target = console.input("[bold green]> target: [/bold green]").strip() or None
                 
@@ -243,6 +247,65 @@ def interactive_mode():
             break
         except EOFError:
             break
+
+
+def _scan_and_show_datasets(path):
+    """Scan directory for datasets and show columns."""
+    from pathlib import Path
+    import pandas as pd
+    
+    p = Path(path)
+    
+    # If it's a file, show its columns
+    if p.is_file():
+        try:
+            df = pd.read_csv(p, nrows=5)
+            console.print(f"\n[bold cyan]Dataset: {p.name}[/bold cyan]")
+            console.print(f"  Rows: {len(pd.read_csv(p)):,}")
+            console.print(f"  Columns ({len(df.columns)}):")
+            for col in df.columns:
+                dtype = df[col].dtype
+                sample = df[col].iloc[0] if len(df) > 0 else "N/A"
+                console.print(f"    - [green]{col}[/green] ({dtype}) [dim]sample: {sample}[/dim]")
+            console.print()
+            return
+        except Exception as e:
+            console.print(f"[red]Error reading file: {e}[/red]")
+            return
+    elif p.is_dir():
+        # Scan directory for CSV/Excel files
+        csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
+        
+        if csv_files:
+            console.print(f"\n[bold cyan]Found {len(csv_files)} dataset(s) in {p.name}/[/bold cyan]\n")
+            
+            table = Table(show_header=True, header_style="bold cyan")
+            table.add_column("#", style="dim")
+            table.add_column("File", style="green")
+            table.add_column("Rows", justify="right")
+            table.add_column("Columns", justify="right")
+            table.add_column("Target Candidates")
+            
+            for i, f in enumerate(csv_files[:10], 1):  # Show max 10
+                try:
+                    df = pd.read_csv(f, nrows=100)
+                    rows = len(pd.read_csv(f))
+                    cols = len(df.columns)
+                    
+                    # Guess target candidates (numeric columns)
+                    num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                    target_hint = ", ".join(num_cols[:3]) if num_cols else "None"
+                    
+                    table.add_row(str(i), f.name, str(rows), str(cols), target_hint)
+                except Exception:
+                    table.add_row(str(i), f.name, "?", "?", "?")
+            
+            console.print(table)
+            console.print()
+        else:
+            console.print(f"\n[yellow]No CSV/Excel files found in {p}[/yellow]")
+    else:
+        console.print(f"\n[yellow]Path not found: {path}[/yellow]")
 
 
 def _run_pipeline(data, target=None):
