@@ -56,33 +56,26 @@ console = Console()
 # ASCII ART BANNER
 # ═══════════════════════════════════════════════════════════════════════════
 
-BANNER = """
-[bold orange1]
- ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ███╗██╗     ┌──────────────────────────────────────────────────────────┐
-██╔═══██╗██╔══██╗██╔════╝████╗  ██║████╗ ████║██║     │ >_ OpenML Code (v1.0.0)                                  │
-██║   ██║██████╔╝█████╗  ██╔██╗ ██║██╔████╔██║██║     │                                                          │
-██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║╚██╔╝██║██║     │ API Key | openml-python (pip) (/model to change)         │
-╚██████╔╝██║     ███████╗██║ ╚████║██║ ╚═╝ ██║███████╗│ ~                                                        │
- ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚══════╝└──────────────────────────────────────────────────────────┘
-[/bold orange1]
-[bold orange1]>_ openml v1.0.3[/bold orange1]
-[dim]Production ML Pipeline | 14+ Models | One Line[/dim]
-"""
-
-BANNER_SIMPLE = """
-[bold blue]>>> open-mlpipe v1.0.2[/bold blue]
-[dim]Production ML Pipeline — 14+ Models — One Line[/dim]
+BANNER_TEMPLATE = """
+[bold red] ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ███╗██╗[/bold red]     [dim]+----------------------------------------------------+[/dim]
+[bold red]██╔═══██╗██╔══██╗██╔════╝████╗  ██║████╗ ████║██║[/bold red]     [dim]| >_ OpenML Code (v{version})                            |[/dim]
+[bold red]██║   ██║██████╔╝█████╗  ██╔██╗ ██║██╔████╔██║██║[/bold red]     [dim]|                                                    |[/dim]
+[bold red]██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║╚██╔╝██║██║[/bold red]     [dim]| API Key | openml-python (pip) (/model to change)   |[/dim]
+[bold red]╚██████╔╝██║     ███████╗██║ ╚████║██║ ╚═╝ ██║███████╗[/bold red][dim] | ~                                                  |[/dim]
+[bold red] ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚══════╝[/bold red][dim] +----------------------------------------------------+[/dim]
 """
 
 
 def print_banner():
-    """Print the ASCII art banner."""
-    # Force UTF-8 output for Unicode characters
+    """Print the ASCII art banner with orange color."""
     import sys
+    from open_mlpipe import __version__
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding='utf-8')
-    print(BANNER)
-    print()
+    banner = BANNER_TEMPLATE.format(version=__version__)
+    console.print(banner)
+    console.print(f"[bold orange1]>_ openml v{__version__}[/bold orange1]")
+    console.print("[dim]Production ML Pipeline | 14+ Models | One Line[/dim]")
 
 
 def print_completion_summary(ctx, start_time):
@@ -183,19 +176,45 @@ def interactive_mode():
             
             if user_input.lower() == "run":
                 console.print("\n[bold]Run Pipeline[/bold]")
-                console.print("[dim]Enter your data file path:[/dim]")
+                console.print("[dim]Enter your data file path (or directory):[/dim]")
                 data = console.input("[bold green]> data: [/bold green]").strip()
                 if not data:
                     console.print("[red]No data file provided[/red]")
                     continue
                 
                 # Scan directory for datasets
-                _scan_and_show_datasets(data)
+                from pathlib import Path
+                p = Path(data)
+                
+                if p.is_dir():
+                    # Interactive dataset selection
+                    csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
+                    if csv_files:
+                        import questionary
+                        choices = [f.name for f in csv_files]
+                        selected = questionary.select(
+                            "Select a dataset:",
+                            choices=choices
+                        ).ask()
+                        if selected:
+                            data = str(p / selected)
+                        else:
+                            console.print("[red]No dataset selected[/red]")
+                            continue
+                    else:
+                        console.print(f"[red]No CSV/Excel files found in {data}[/red]")
+                        continue
+                elif p.is_file():
+                    # Single file - show columns
+                    _scan_and_show_datasets(data)
+                else:
+                    console.print(f"[red]Path not found: {data}[/red]")
+                    continue
                 
                 console.print("[dim]Enter target column (or press Enter for auto-detect):[/dim]")
                 target = console.input("[bold green]> target: [/bold green]").strip() or None
                 
-                console.print(f"\n[bold]Starting pipeline for {data}...[/bold]\n")
+                console.print(f"\n[bold]Starting pipeline for {Path(data).name}...[/bold]\n")
                 _run_pipeline(data, target)
                 continue
             
