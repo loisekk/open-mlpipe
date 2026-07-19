@@ -11,8 +11,11 @@ class CleanStage(Stage):
     version = "1.0"
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
-        df = ctx.clean_data.copy()
+        df = ctx.clean_data
         config = ctx.config
+        if df is None or config is None:
+            return ctx
+        df = df.copy()
 
         # 1. Remove duplicates
         if config.cleaning.remove_duplicates:

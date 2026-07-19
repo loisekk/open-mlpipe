@@ -9,7 +9,6 @@ from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
 from open_mlpipe.utils.typing import TaskType
 
-
 class SplitStage(Stage):
     name = "split"
     version = "1.0"
