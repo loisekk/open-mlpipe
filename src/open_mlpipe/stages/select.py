@@ -14,15 +14,17 @@ class SelectStage(Stage):
     version = "1.0"
 
     def should_skip(self, ctx: PipelineContext) -> bool:
-        return not ctx.config.feature_selection.enabled
+        config = ctx.config
+        if config is None:
+            return True
+        return not config.feature_selection.enabled
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
         # Use tuned model if available, else best baseline
         model = ctx.tuned_model or ctx.best_model
-        if model is None:
-            return ctx
-
         X_train = ctx.X_train
+        if model is None or X_train is None:
+            return ctx
 
         # Get feature importances — use preprocessed feature names
         try:

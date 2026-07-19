@@ -11,11 +11,15 @@ class ExplainStage(Stage):
     version = "1.0"
 
     def should_skip(self, ctx: PipelineContext) -> bool:
-        return not ctx.config.evaluation.explainability
+        config = ctx.config
+        if config is None:
+            return True
+        return not config.evaluation.explainability
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
         model = ctx.tuned_model or ctx.best_model
-        if model is None:
+        X_test = ctx.X_test
+        if model is None or X_test is None:
             return ctx
 
         try:
@@ -24,11 +28,11 @@ class ExplainStage(Stage):
             # Get model from pipeline
             if hasattr(model, "named_steps") and "model" in model.named_steps:
                 m = model.named_steps["model"]
-                pre = model.named_steps["preprocessor"]
-                X_test_trans = pre.transform(ctx.X_test)
+                pre = model.named_steps.get("preprocessor")
+                X_test_trans = pre.transform(X_test) if pre is not None else X_test.values
             else:
                 m = model
-                X_test_trans = ctx.X_test.values
+                X_test_trans = X_test.values
 
             # Use TreeExplainer for tree models
             if hasattr(m, "feature_importances_"):

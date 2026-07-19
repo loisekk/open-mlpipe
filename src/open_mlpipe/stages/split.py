@@ -18,12 +18,15 @@ class SplitStage(Stage):
         df = ctx.clean_data
         config = ctx.config
         target = ctx.target_column
+        task_type = ctx.task_type
+        if df is None or config is None or target is None or task_type is None:
+            return ctx
 
         X = df.drop(columns=[target])
         y = df[target]
 
         # Encode target if classification and string/category
-        if ctx.task_type == TaskType.CLASSIFICATION and y.dtype in ("object", "category"):
+        if task_type == TaskType.CLASSIFICATION and y.dtype in ("object", "category"):
             from sklearn.preprocessing import LabelEncoder
             le = LabelEncoder()
             y = pd.Series(le.fit_transform(y), name=target)
@@ -31,7 +34,7 @@ class SplitStage(Stage):
 
         # Determine stratification
         stratify = None
-        if ctx.task_type == TaskType.CLASSIFICATION:
+        if task_type == TaskType.CLASSIFICATION:
             stratify = y
 
         test_size = config.data.test_size
@@ -43,7 +46,7 @@ class SplitStage(Stage):
             test_size=test_size,
             random_state=config.data.random_state,
             stratify=stratify,
-        )
+        )  # type: ignore[assignment]
 
         ctx.X_train = X_train
         ctx.X_test = X_test

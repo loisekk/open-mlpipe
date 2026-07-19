@@ -17,16 +17,31 @@ class TuneStage(Stage):
     version = "1.0"
 
     def should_skip(self, ctx: PipelineContext) -> bool:
-        return not ctx.config.tuning.enabled
+        config = ctx.config
+        if config is None:
+            return True
+        return not config.tuning.enabled
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
         config = ctx.config
-
-        if ctx.best_model_name is None or ctx.best_model is None:
+        if config is None:
+            return ctx
+        task_type = ctx.task_type
+        X_train = ctx.X_train
+        y_train = ctx.y_train
+        preprocessor = ctx.preprocessor
+        if (
+            ctx.best_model_name is None
+            or ctx.best_model is None
+            or task_type is None
+            or X_train is None
+            or y_train is None
+            or preprocessor is None
+        ):
             return ctx
 
         # Get search space for the best model
-        search_space = self._get_search_space(ctx.best_model_name, ctx.task_type)
+        search_space = self._get_search_space(ctx.best_model_name, task_type)
 
         if not search_space:
             return ctx
@@ -36,49 +51,55 @@ class TuneStage(Stage):
             params = {}
             for param_name, param_config in search_space.items():
                 if param_config["type"] == "int":
-                    params[param_name] = trial.suggest_int(param_name, param_config["low"], param_config["high"])
+                    params[param_name] = trial.suggest_int(
+                        param_name, param_config["low"], param_config["high"])
                 elif param_config["type"] == "float_log":
-                    params[param_name] = trial.suggest_float(param_name, param_config["low"], param_config["high"], log=True)
+                    params[param_name] = trial.suggest_float(
+                        param_name, param_config["low"], param_config["high"], log=True)
                 elif param_config["type"] == "float":
-                    params[param_name] = trial.suggest_float(param_name, param_config["low"], param_config["high"])
+                    params[param_name] = trial.suggest_float(
+                        param_name, param_config["low"], param_config["high"])
 
             # Build model with suggested params
-            model = self._build_model(ctx.best_model_name, params, ctx.task_type)
+            model = self._build_model(ctx.best_model_name, params, task_type)
             pipe = Pipeline([
-                ("preprocessor", ctx.preprocessor),
+                ("preprocessor", preprocessor),
                 ("model", model),
             ])
 
-            task = ctx.task_type
-            if task == TaskType.CLASSIFICATION:
+            if task_type == TaskType.CLASSIFICATION:
                 cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
                 scoring = "f1_macro"
             else:
                 cv = KFold(n_splits=3, shuffle=True, random_state=42)
                 scoring = "neg_root_mean_squared_error"
 
-            scores = cross_val_score(pipe, ctx.X_train, ctx.y_train, cv=cv, scoring=scoring, n_jobs=1)
+            scores = cross_val_score(
+                pipe, X_train, y_train, cv=cv, scoring=scoring, n_jobs=1)
             return scores.mean()
 
         # Run Optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         n_trials = config.tuning.n_trials
         if isinstance(n_trials, str):
-            n_trials = SmartDefaults.allocate_tuning_budget(len(ctx.X_train), len(ctx.X_train.columns))
+            n_trials = SmartDefaults.allocate_tuning_budget(
+                len(X_train), len(X_train.columns))
 
         study = optuna.create_study(
             direction="maximize",
             sampler=optuna.samplers.TPESampler(seed=42),
         )
-        study.optimize(objective, n_trials=int(n_trials), timeout=config.tuning.timeout)
+        study.optimize(
+            objective, n_trials=int(n_trials), timeout=config.tuning.timeout)
 
         # Build best model
-        best_model = self._build_model(ctx.best_model_name, study.best_params, ctx.task_type)
+        best_model = self._build_model(
+            ctx.best_model_name, study.best_params, task_type)
         pipe = Pipeline([
-            ("preprocessor", ctx.preprocessor),
+            ("preprocessor", preprocessor),
             ("model", best_model),
         ])
-        pipe.fit(ctx.X_train, ctx.y_train)
+        pipe.fit(X_train, y_train)
 
         ctx.tuned_model = pipe
         ctx.metrics["tuned_best_value"] = study.best_value

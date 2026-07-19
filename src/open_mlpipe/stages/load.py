@@ -15,6 +15,8 @@ class DataLoaderStage(Stage):
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
         config = ctx.config
+        if config is None:
+            return ctx
         df = load_data(
             config.data.path,
             sep=config.data.separator,
@@ -36,11 +38,11 @@ class DataLoaderStage(Stage):
         ctx.clean_data = df.copy()
 
         # Detect target
-        target = config.data.target
+        target: str | None = config.data.target
         if target is None:
             target = SmartDefaults.detect_target_column(df)
             if target is None:
-                target = df.columns[-1]
+                target = str(df.columns[-1])
         ctx.target_column = target
 
         # Detect task
@@ -52,10 +54,14 @@ class DataLoaderStage(Stage):
         ctx.task_type = task
 
         # Detect column types
-        ctx.column_types = SmartDefaults.detect_column_types(df.drop(columns=[target], errors="ignore"))
+        ctx.column_types = SmartDefaults.detect_column_types(
+            df.drop(columns=[target], errors="ignore")
+        )
 
         # Classify columns
-        numeric_cols, cat_cols, datetime_cols = [], [], []
+        numeric_cols: list[str] = []
+        cat_cols: list[str] = []
+        datetime_cols: list[str] = []
         for col, ct in ctx.column_types.items():
             if ct.value == "numeric":
                 numeric_cols.append(col)

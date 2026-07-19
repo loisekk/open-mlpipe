@@ -72,6 +72,9 @@ class PipelineContext:
     # Preprocessor
     preprocessor: Any = None
 
+    # Encoder state (set by SplitStage)
+    _label_encoder: Any | None = None
+
     # Stage tracking
     stage_history: list[StageMetadata] = field(default_factory=list)
     metrics: dict[str, Any] = field(default_factory=dict)  # float | str | dict | list
@@ -89,7 +92,7 @@ class PipelineContext:
 
     # Artifacts
     artifact_dir: str | None = None
-    reports: dict[str, str] = field(default_factory=dict)
+    reports: dict[str, Any] = field(default_factory=dict)
 
     def add_stage(self, meta: StageMetadata) -> None:
         """Record a stage execution."""
