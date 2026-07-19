@@ -9,6 +9,7 @@ from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
 from open_mlpipe.utils.typing import TaskType
 
+
 class SplitStage(Stage):
     name = "split"
     version = "1.0"
@@ -45,15 +46,15 @@ class SplitStage(Stage):
             test_size=test_size,
             random_state=config.data.random_state,
             stratify=stratify,
-        )  # type: ignore[assignment]
+        )
 
-        ctx.X_train = X_train
-        ctx.X_test = X_test
-        ctx.y_train = y_train
-        ctx.y_test = y_test
+        ctx.X_train = X_train  # type: ignore[assignment]
+        ctx.X_test = X_test  # type: ignore[assignment]
+        ctx.y_train = y_train  # type: ignore[assignment]
+        ctx.y_test = y_test  # type: ignore[assignment]
 
         # Update column types after split
-        ctx.numeric_columns = [c for c in ctx.numeric_columns if c in X_train.columns]
-        ctx.categorical_columns = [c for c in ctx.categorical_columns if c in X_train.columns]
+        ctx.numeric_columns = [c for c in ctx.numeric_columns if c in X_train.columns]  # type: ignore[union-attr]
+        ctx.categorical_columns = [c for c in ctx.categorical_columns if c in X_train.columns]  # type: ignore[union-attr]
 
         return ctx

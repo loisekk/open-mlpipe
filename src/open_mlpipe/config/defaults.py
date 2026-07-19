@@ -23,11 +23,12 @@ class SmartDefaults:
     @staticmethod
     def detect_task(target: pd.Series) -> TaskType:
         """Auto-detect classification vs regression from target column."""
-        if target.dtype == "object" or target.dtype.name == "category":
+        dtype_str = str(target.dtype)
+        if dtype_str == "object" or dtype_str == "category":
             return TaskType.CLASSIFICATION
         if target.nunique() < 20 and target.nunique() / len(target) < 0.05:
             return TaskType.CLASSIFICATION
-        if target.dtype in ("int64", "int32") and target.nunique() < 20:
+        if dtype_str in ("int64", "int32") and target.nunique() < 20:
             return TaskType.CLASSIFICATION
         return TaskType.REGRESSION
 
@@ -66,7 +67,8 @@ class SmartDefaults:
         name_looks_like_id = any(p in col.lower() for p in id_patterns)
 
         # Monotonically increasing = likely auto-increment ID
-        if series.dtype in ("float64", "int64"):
+        dtype_str = str(series.dtype)
+        if dtype_str in ("float64", "int64"):
             diffs = series.dropna().diff().dropna()
             is_monotonic = len(diffs) > 0 and ((diffs > 0).all() or (diffs < 0).all())
         else:
@@ -93,11 +95,11 @@ class SmartDefaults:
                 pass
 
         # Numeric
-        if series.dtype in ("float64", "int64"):
+        if dtype_str in ("float64", "int64"):
             return ColumnType.NUMERIC
 
         # Categorical: string with low-to-moderate cardinality
-        if series.dtype == "object" or series.dtype.name == "category":
+        if dtype_str == "object" or dtype_str == "category":
             if nunique < total * 0.5:
                 return ColumnType.CATEGORICAL
             return ColumnType.TEXT
