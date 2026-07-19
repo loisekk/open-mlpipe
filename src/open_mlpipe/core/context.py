@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -25,6 +27,10 @@ class StageMetadata:
     artifacts: dict[str, str] = field(default_factory=dict)
     duration_seconds: float = 0.0
     warnings: list[str] = field(default_factory=list)
+
+
+if TYPE_CHECKING:
+    from open_mlpipe.config.schema import PipelineConfig  # noqa: F401
 
 
 @dataclass
@@ -51,7 +57,7 @@ class PipelineContext:
     final_model: Any | None = None
 
     # Metadata
-    config: Any | None = None
+    config: PipelineConfig | None = None  # type: ignore[valid-type]
     task_type: TaskType | None = None
     target_column: str | None = None
     raw_feature_columns: list[str] = field(default_factory=list)
@@ -70,7 +76,7 @@ class PipelineContext:
 
     # Stage tracking
     stage_history: list[StageMetadata] = field(default_factory=list)
-    metrics: dict[str, float] = field(default_factory=dict)
+    metrics: dict[str, Any] = field(default_factory=dict)  # float | str | dict | list
 
     # EDA results
     eda_report: dict[str, Any] | None = None

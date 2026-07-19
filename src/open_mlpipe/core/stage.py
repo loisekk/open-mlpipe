@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from open_mlpipe.core.context import PipelineContext
 
 
 class Stage(ABC):
-    """Base class for all pipeline stages."""
+    """Base class for all pipeline stages.
 
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Stage name for logging."""
+    Subclasses must define:
+        name: ClassVar[str] = "stage_name"
+        execute(ctx) -> PipelineContext
+    """
 
-    @property
-    def version(self) -> str:
-        return "1.0"
+    name: ClassVar[str] = "stage"
+    version: ClassVar[str] = "1.0"
 
     @abstractmethod
     def execute(self, ctx: PipelineContext) -> PipelineContext:

@@ -18,6 +18,8 @@ class PreprocessStage(Stage):
     version = "1.0"
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
+        if ctx.X_train is None:
+            raise ValueError("ctx.X_train is None — cannot preprocess without training data")
         X_train = ctx.X_train.copy()
 
         # Build numeric pipelines

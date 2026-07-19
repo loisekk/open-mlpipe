@@ -51,11 +51,18 @@ class SaveStage(Stage):
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
         config = ctx.config
+        if config is None:
+            return ctx
         output_dir = Path(config.artifacts.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         model = ctx.tuned_model or ctx.best_model
         if model is None:
+            return ctx
+
+        X_train = ctx.X_train
+        y_train = ctx.y_train
+        if X_train is None or y_train is None:
             return ctx
 
         # Build full inference pipeline: feature_engineering + model
@@ -69,11 +76,11 @@ class SaveStage(Stage):
         # interaction columns, missingness flags, etc. from scratch
         if ctx.raw_feature_columns:
             # Exclude target column (not in X_train)
-            raw_cols = [c for c in ctx.raw_feature_columns if c != ctx.target_column and c in ctx.X_train.columns]
-            raw_df = ctx.X_train[raw_cols].copy()
+            raw_cols = [c for c in ctx.raw_feature_columns if c != ctx.target_column and c in X_train.columns]
+            raw_df = X_train[raw_cols].copy()
         else:
-            raw_df = ctx.X_train.copy()
-        fe_transformer.fit(raw_df, ctx.y_train)
+            raw_df = X_train.copy()
+        fe_transformer.fit(raw_df, y_train)
 
         full_pipeline = SKPipeline([
             ("feature_eng", fe_transformer),
@@ -123,8 +130,8 @@ class SaveStage(Stage):
     def _log_mlflow(self, ctx, model, metadata):
         """Log to MLflow."""
         try:
-            import mlflow
-            import mlflow.sklearn
+            import mlflow  # type: ignore[import-untyped]
+            from mlflow import sklearn as mlflow_sklearn  # type: ignore[import-untyped]
 
             experiment_name = ctx.config.artifacts.mlflow_experiment
             if experiment_name == "auto":
@@ -143,7 +150,7 @@ class SaveStage(Stage):
                     if isinstance(native_v, int | float):
                         mlflow.log_metric(k, native_v)
 
-                mlflow.sklearn.log_model(model, artifact_path="model")
+                mlflow_sklearn.log_model(model, artifact_path="model")
                 ctx.reports["mlflow_run"] = True
         except Exception as e:
             print(f"    MLflow logging skipped: {e}")

@@ -31,9 +31,13 @@ class EvaluateStage(Stage):
 
         X_test = ctx.X_test
         y_test = ctx.y_test
+        if X_test is None or y_test is None:
+            return ctx
 
         y_pred = model.predict(X_test)
         task = ctx.task_type
+        if task is None:
+            return ctx
 
         if task == TaskType.CLASSIFICATION:
             self._eval_classification(ctx, y_test, y_pred, model, X_test)

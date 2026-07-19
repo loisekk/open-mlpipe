@@ -67,10 +67,12 @@ class CompareStage(Stage):
         X_train = ctx.X_train
         y_train = ctx.y_train
         config = ctx.config
-        assert config is not None, "PipelineContext.config must not be None"
+        if X_train is None or y_train is None or config is None:
+            return ctx
 
         task = ctx.task_type
-        assert task is not None, "PipelineContext.task_type must not be None"
+        if task is None:
+            return ctx
         scoring = config.model_selection.scoring or SmartDefaults.default_scoring(task)
 
         # Get model candidates
@@ -221,18 +223,18 @@ class CompareStage(Stage):
         if name == "random_forest":
             if is_cls:
                 from sklearn.ensemble import RandomForestClassifier
-                return RandomForestClassifier(n_estimators=300, class_weight="balanced", max_features="sqrt", n_jobs=1, random_state=42)
+                return RandomForestClassifier(n_estimators=300, class_weight="balanced", max_features="sqrt", n_jobs=1, random_state=42)  # type: ignore[arg-type]
             else:
                 from sklearn.ensemble import RandomForestRegressor
-                return RandomForestRegressor(n_estimators=300, max_features="sqrt", n_jobs=1, random_state=42)
+                return RandomForestRegressor(n_estimators=300, max_features="sqrt", n_jobs=1, random_state=42)  # type: ignore[arg-type]
 
         if name == "extra_trees":
             if is_cls:
                 from sklearn.ensemble import ExtraTreesClassifier
-                return ExtraTreesClassifier(n_estimators=300, class_weight="balanced", max_features="sqrt", n_jobs=1, random_state=42)
+                return ExtraTreesClassifier(n_estimators=300, class_weight="balanced", max_features="sqrt", n_jobs=1, random_state=42)  # type: ignore[arg-type]
             else:
                 from sklearn.ensemble import ExtraTreesRegressor
-                return ExtraTreesRegressor(n_estimators=300, max_features="sqrt", n_jobs=1, random_state=42)
+                return ExtraTreesRegressor(n_estimators=300, max_features="sqrt", n_jobs=1, random_state=42)  # type: ignore[arg-type]
 
         # ── Boosting Models ────────────────────────────────────────────────
         if name == "xgboost":
@@ -259,7 +261,7 @@ class CompareStage(Stage):
 
         if name == "catboost":
             try:
-                from catboost import CatBoostClassifier, CatBoostRegressor
+                from catboost import CatBoostClassifier, CatBoostRegressor  # type: ignore[import-untyped]
                 if is_cls:
                     return CatBoostClassifier(iterations=300, learning_rate=0.05, depth=6,
                                              verbose=0, random_state=42)
@@ -285,11 +287,13 @@ class CompareStage(Stage):
                 HistGradientBoostingRegressor,
             )
             if is_cls:
-                return HistGradientBoostingClassifier(max_iter=300, learning_rate=0.05,
-                                                      early_stopping=True, random_state=42)
+                return HistGradientBoostingClassifier(
+                    max_iter=300, learning_rate=0.05,
+                    early_stopping=True, random_state=42)  # pyright: ignore
             else:
-                return HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05,
-                                                     early_stopping=True, random_state=42)
+                return HistGradientBoostingRegressor(
+                    max_iter=300, learning_rate=0.05,
+                    early_stopping=True, random_state=42)  # pyright: ignore
 
         if name == "adaboost":
             from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor

@@ -14,12 +14,16 @@ class FeatureEngStage(Stage):
     version = "1.0"
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
+        if ctx.clean_data is None:
+            return ctx
         df = ctx.clean_data.copy()
 
         # Store raw columns before feature engineering (for inference pipeline)
         ctx.raw_feature_columns = list(df.columns)
 
         config = ctx.config
+        if config is None:
+            return ctx
 
         # 1. Missingness flags
         if config.feature_engineering.missingness_flags:

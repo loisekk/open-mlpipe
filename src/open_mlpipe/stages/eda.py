@@ -12,6 +12,8 @@ Phases from user's Obsidian EDA folder:
 
 from __future__ import annotations
 
+import re
+
 from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
 
@@ -21,6 +23,8 @@ class EDALoaderStage(Stage):
     version = "1.0"
 
     def execute(self, ctx: PipelineContext) -> PipelineContext:
+        if ctx.clean_data is None:
+            raise ValueError("EDALoaderStage: ctx.clean_data is None — no data to analyze.")
         df = ctx.clean_data.copy()
 
         # ── Phase 1: Column Hygiene ──
@@ -45,7 +49,7 @@ class EDALoaderStage(Stage):
         # Update target_column if it was renamed during column hygiene
         if ctx.target_column and ctx.target_column not in df.columns:
             cleaned = ctx.target_column.lower().strip().replace(" ", "_")
-            cleaned = __import__("re").sub(r"[^\w]", "", cleaned)
+            cleaned = re.sub(r"[^\w]", "", cleaned)
             if cleaned in df.columns:
                 ctx.target_column = cleaned
 
@@ -58,7 +62,7 @@ class EDALoaderStage(Stage):
                 else:
                     for orig_col, ct in ctx.column_types.items():
                         cleaned_orig = orig_col.lower().strip().replace(" ", "_")
-                        cleaned_orig = __import__("re").sub(r"[^\w]", "", cleaned_orig)
+                        cleaned_orig = re.sub(r"[^\w]", "", cleaned_orig)
                         if cleaned_orig == col:
                             new_types[col] = ct
                             break
@@ -72,7 +76,7 @@ class EDALoaderStage(Stage):
                     result.append(item)
                 else:
                     cleaned = item.lower().strip().replace(" ", "_")
-                    cleaned = __import__("re").sub(r"[^\w]", "", cleaned)
+                    cleaned = re.sub(r"[^\w]", "", cleaned)
                     if cleaned in df_cols:
                         result.append(cleaned)
             return result
