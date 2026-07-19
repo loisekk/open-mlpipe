@@ -83,9 +83,9 @@ class SmartDefaults:
             return ColumnType.BOOLEAN
 
         # Datetime
-        if series.dtype == "datetime64[ns]":
+        if dtype_str == "datetime64[ns]":
             return ColumnType.DATETIME
-        if series.dtype == "object":
+        if dtype_str == "object":
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", UserWarning)
@@ -143,7 +143,7 @@ class SmartDefaults:
         if model_family in ("tree", "forest", "boosting"):
             return ScalerType.NONE  # trees are scale-invariant
 
-        skew = float(col.skew())
+        skew = float(col.skew())  # type: ignore[arg-type]
 
         if skew > 1.0:
             return ScalerType.POWER
@@ -253,7 +253,7 @@ class SmartDefaults:
         num_cols = df.select_dtypes(include=["number"]).columns.tolist()
         skewed, normal = [], []
         for col in num_cols:
-            skew_val = abs(df[col].skew())
+            skew_val = float(abs(df[col].skew()))
             if skew_val > threshold:
                 skewed.append(col)
             else:
