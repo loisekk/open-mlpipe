@@ -253,7 +253,7 @@ class SmartDefaults:
         num_cols = df.select_dtypes(include=["number"]).columns.tolist()
         skewed, normal = [], []
         for col in num_cols:
-            skew_val = float(abs(df[col].skew()))
+            skew_val = abs(float(df[col].skew()))  # type: ignore[arg-type]
             if skew_val > threshold:
                 skewed.append(col)
             else:

@@ -30,7 +30,7 @@ class SplitStage(Stage):
         if task_type == TaskType.CLASSIFICATION and y_dtype in ("object", "category"):
             from sklearn.preprocessing import LabelEncoder
             le = LabelEncoder()
-            y = pd.Series(le.fit_transform(y), name=target)
+            y = pd.Series(le.fit_transform(y.to_numpy()).tolist(), name=target, dtype=int)
             ctx._label_encoder = le
 
         # Determine stratification
