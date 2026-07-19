@@ -170,33 +170,48 @@ class SmartDefaults:
     # ── Model Selection ──
 
     @staticmethod
-    def select_models(task: TaskType, n_rows: int, n_features: int) -> list[str]:
+    def select_models(
+        task: TaskType, n_rows: int, n_features: int, n_features_encoded: int | None = None
+    ) -> list[str]:
         """Pick model candidates based on data characteristics.
+
+        Uses rows-per-feature ratio as the primary signal — pure row-count
+        thresholds are blind to dimensionality explosion from OHE.
 
         Research-backed (Feldman 2020, Kösters 2024, TabArena 2025):
         - Tree models beat distance-based on mixed-type tabular data
         - KNN excluded from defaults (curse of dimensionality with OHE)
-        - Linear models safest for very small datasets (low variance)
-        - Complex tree/boosting added only when data can support them
+        - SVM/gaussian kernel models need adequate sample density (ratio > 20)
+        - Complex tree/boosting needs enough rows per feature to avoid memorization
         """
-        models = []
+        n_feat = max(n_features_encoded or n_features, 1)
+        ratio = n_rows / n_feat
+        models: list[str] = []
 
         if task == TaskType.CLASSIFICATION:
             models.append("logistic_regression")
 
-            # Add tree/boosting only when data is sufficient
-            if n_rows >= 500:
-                models.extend(["random_forest", "lightgbm", "xgboost"])
-                if n_rows >= 1_000:
-                    models.append("catboost")
-            if n_rows < 1_000:
+            # SVM needs dense coverage of input space
+            if ratio > 20:
                 models.append("svm")
+
+            # Tree ensembles need enough rows per feature
+            if n_rows >= 1000 and ratio > 10:
+                models.extend(["random_forest", "lightgbm", "xgboost"])
+
+            if n_rows >= 5000 and ratio > 30:
+                models.append("catboost")
         else:
             models.append("ridge")
-            if n_rows >= 500:
+
+            if ratio > 20:
+                models.append("svm")
+
+            if n_rows >= 1000 and ratio > 10:
                 models.extend(["random_forest", "lightgbm", "xgboost"])
-                if n_rows >= 1_000:
-                    models.append("catboost")
+
+            if n_rows >= 5000 and ratio > 30:
+                models.append("catboost")
 
         return models
 

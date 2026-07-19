@@ -53,10 +53,46 @@ def test_detect_column_types_returns_dict():
 def test_select_models_regression():
     models = SmartDefaults.select_models(TaskType.REGRESSION, n_rows=5000, n_features=20)
     assert "ridge" in models
+    assert "svm" in models
     assert "random_forest" in models
     assert "lightgbm" in models
     assert "xgboost" in models
+    assert "catboost" in models
     assert isinstance(models, list)
+
+
+@pytest.mark.unit
+def test_select_models_ratio_gates_svm_out():
+    """300 rows / 18 features = ratio 16.7 — SVM should not be included."""
+    models = SmartDefaults.select_models(TaskType.CLASSIFICATION, n_rows=300, n_features=18)
+    assert "logistic_regression" in models
+    assert "svm" not in models
+    assert len(models) == 1
+
+
+@pytest.mark.unit
+def test_select_models_ratio_uses_encoded_features():
+    """300 rows / 70 encoded features = ratio 4.3 — only LR."""
+    models = SmartDefaults.select_models(
+        TaskType.CLASSIFICATION, n_rows=300, n_features=18, n_features_encoded=70
+    )
+    assert models == ["logistic_regression"]
+
+
+@pytest.mark.unit
+def test_select_models_catboost_gate():
+    """CatBoost needs >=5000 rows AND ratio > 30."""
+    # 5000/200 = 25 — ratio too low
+    models = SmartDefaults.select_models(
+        TaskType.CLASSIFICATION, n_rows=5000, n_features=30, n_features_encoded=200
+    )
+    assert "catboost" not in models
+
+    # 10000/200 = 50 — ratio passes
+    models2 = SmartDefaults.select_models(
+        TaskType.CLASSIFICATION, n_rows=10000, n_features=30, n_features_encoded=200
+    )
+    assert "catboost" in models2
 
 
 @pytest.mark.unit

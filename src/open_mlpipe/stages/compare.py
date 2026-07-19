@@ -78,7 +78,7 @@ class CompareStage(Stage):
         # Get model candidates
         candidates = config.model_selection.candidates
         if isinstance(candidates, str) and candidates == "auto":
-            candidates = SmartDefaults.select_models(task, len(X_train), len(X_train.columns))
+            candidates = SmartDefaults.select_models(task, len(X_train), len(X_train.columns), n_features_encoded=len(X_train.columns))
 
         # Build model instances
         models = self._build_models(candidates, task)
