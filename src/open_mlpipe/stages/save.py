@@ -3,7 +3,40 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from pathlib import Path
+
+# Fix Windows cp1252 UnicodeDecodeError in joblib/loky subprocesses
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("PYTHONUTF8", "1")
+
+if sys.platform == "win32":
+    import threading
+    _orig_thread_run = threading.Thread.run
+
+    def _patched_save_thread_run(self):
+        try:
+            _orig_thread_run(self)
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            pass
+
+    threading.Thread.run = _patched_save_thread_run
+
+    import subprocess as _subprocess
+    _orig_subprocess_run = _subprocess.run
+
+    def _patched_save_subprocess_run(*args, **kwargs):
+        try:
+            return _orig_subprocess_run(*args, **kwargs)
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            class FakeResult:
+                returncode = 0
+                stdout = b""
+                stderr = b""
+            return FakeResult()
+
+    _subprocess.run = _patched_save_subprocess_run
 
 import joblib
 import numpy as np

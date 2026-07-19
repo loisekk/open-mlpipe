@@ -70,6 +70,7 @@ class CompareStage(Stage):
         assert config is not None, "PipelineContext.config must not be None"
 
         task = ctx.task_type
+        assert task is not None, "PipelineContext.task_type must not be None"
         scoring = config.model_selection.scoring or SmartDefaults.default_scoring(task)
 
         # Get model candidates
