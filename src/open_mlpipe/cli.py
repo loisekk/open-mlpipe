@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 import sys
 import time
+
 from open_mlpipe.config.schema import DataConfig
+
 # Fix Windows cp1252 UnicodeDecodeError in joblib/loky subprocesses
 # Must be set before any joblib/sklearn imports
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")

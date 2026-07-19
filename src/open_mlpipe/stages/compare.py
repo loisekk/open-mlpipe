@@ -261,7 +261,10 @@ class CompareStage(Stage):
 
         if name == "catboost":
             try:
-                from catboost import CatBoostClassifier, CatBoostRegressor  # type: ignore[import-untyped]
+                from catboost import (  # type: ignore[import-untyped]
+                    CatBoostClassifier,
+                    CatBoostRegressor,
+                )
                 if is_cls:
                     return CatBoostClassifier(iterations=300, learning_rate=0.05, depth=6,
                                              verbose=0, random_state=42)
