@@ -52,6 +52,9 @@ mlruns/
 # Blog files (not needed in repo)
 blog-*.md
 
+# Temp test data
+test_churn.csv
+
 # Old/legacy files
 mlpipe/
 run_tests.py
