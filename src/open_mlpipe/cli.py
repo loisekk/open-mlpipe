@@ -14,38 +14,8 @@ os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8", "1")
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 4))
 
-# Suppress loky/Windows UnicodeDecodeError in background threads
-# This is a known Windows bug: wmic output is UTF-8 but subprocess reads cp1252
-if sys.platform == "win32":
-    import threading
-    _orig_thread_run = threading.Thread.run
-
-    def _patched_thread_run(self):
-        try:
-            _orig_thread_run(self)
-        except (UnicodeDecodeError, UnicodeEncodeError):
-            pass  # loky cp1252 bug — non-fatal, falls back to logical cores
-
-    threading.Thread.run = _patched_thread_run
-
-    # Also patch subprocess to handle encoding errors
-    import subprocess
-    _orig_subprocess_run = subprocess.run
-
-    def _patched_subprocess_run(*args, **kwargs):
-        try:
-            return _orig_subprocess_run(*args, **kwargs)
-        except (UnicodeDecodeError, UnicodeEncodeError):
-            # Return empty result on encoding error
-            class FakeResult:
-                returncode = 0
-                stdout = b""
-                stderr = b""
-            return FakeResult()
-
-    subprocess.run = _patched_subprocess_run
-
 import click
+from InquirerPy.resolver import prompt as inquirer_prompt
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -81,7 +51,7 @@ def print_banner():
     console.print("[dim]Production ML Pipeline | 14+ Models | One Line[/dim]")
 
 
-def print_completion_summary(ctx, start_time):
+def print_completion_summary(ctx, start_time, session_log_path=None):
     """Print a beautiful completion summary with stats."""
     elapsed = time.time() - start_time
 
@@ -122,6 +92,13 @@ def print_completion_summary(ctx, start_time):
                 f"[green]Model saved to:[/green] [bold]{model_path}[/bold]",
                 border_style="green",
             )
+        )
+
+    # Session log path
+    if session_log_path:
+        console.print()
+        console.print(
+            f"[dim]Full session log (scrollable):[/dim] [cyan]{session_log_path}[/cyan]"
         )
 
     # Quick prediction example
@@ -229,8 +206,57 @@ def interactive_mode():
                     console.print(f"[red]Path not found: {data}[/red]")
                     continue
 
-                console.print("[dim]Enter target column (or press Enter for auto-detect):[/dim]")
-                target = console.input("[bold green]> target: [/bold green]").strip() or None
+                console.print("[dim]Select target column:[/dim]")
+
+                # Show column list and let user pick with arrow keys
+                import pandas as pd
+                try:
+                    df_preview = pd.read_csv(data, nrows=100, low_memory=False)
+                    cols = list(df_preview.columns)
+
+                    # Auto-detect likely target columns
+                    target_hints = _suggest_target_columns(df_preview)
+
+                    # Build choices for InquirerPy
+                    choices = []
+                    for col in cols:
+                        hint = ""
+                        if col in [t["col"] for t in target_hints]:
+                            hint_data = next(t for t in target_hints if t["col"] == col)
+                            hint = f" [dim]({hint_data['reason']})[/dim]"
+                        choices.append({"name": col, "value": col})
+
+                    # Add auto-detect option
+                    choices.insert(0, {"name": "[auto-detect] Let pipeline choose", "value": "__auto__"})
+
+                    # Show suggestions
+                    if target_hints:
+                        console.print()
+                        console.print("[bold cyan]Suggested target columns:[/bold cyan]")
+                        for t in target_hints[:3]:
+                            console.print(f"  [green]{t['col']}[/green] [dim]- {t['reason']}[/dim]")
+                        console.print()
+
+                    # Arrow key selection
+                    result = inquirer_prompt({
+                        "type": "list",
+                        "name": "target",
+                        "message": "Select target column:",
+                        "choices": choices,
+                        "default": choices[0]["value"] if target_hints else choices[1]["value"],
+                    })
+
+                    target = result["target"]
+                    if target == "__auto__":
+                        target = None
+                        console.print("[dim]Using auto-detect[/dim]")
+                    else:
+                        console.print(f"[green]Selected: {target}[/green]")
+
+                except Exception as e:
+                    # Fallback to text input if anything fails
+                    console.print(f"[yellow]Could not read columns: {e}[/yellow]")
+                    target = None
 
                 console.print(f"\n[bold]Starting pipeline for {Path(data).name}...[/bold]\n")
                 _run_pipeline(data, target)
@@ -288,6 +314,66 @@ def interactive_mode():
             break
         except EOFError:
             break
+
+
+def _suggest_target_columns(df):
+    """Suggest likely target columns based on heuristics."""
+    suggestions = []
+
+    for col in df.columns:
+        dtype = str(df[col].dtype)
+        nunique = df[col].nunique()
+        total = len(df)
+
+        # Skip ID-like columns
+        if nunique == total:
+            continue
+        if col.lower() in ("id", "index", "row", "record"):
+            continue
+
+        # Classification target: categorical or low-cardinality numeric
+        if dtype == "object" or dtype == "category":
+            if 2 <= nunique <= 20:
+                suggestions.append({
+                    "col": col,
+                    "reason": f"Classification target ({nunique} categories)",
+                })
+            continue
+
+        # Regression target: numeric with continuous values
+        if dtype in ("float64", "int64"):
+            # Check if it looks like a label/target
+            is_continuous = nunique > 20
+            has_outliers = False
+
+            if is_continuous:
+                q1, q3 = df[col].quantile(0.25), df[col].quantile(0.75)
+                iqr = q3 - q1
+                if iqr > 0:
+                    has_outliers = ((df[col] < q1 - 1.5 * iqr) | (df[col] > q3 + 1.5 * iqr)).sum() > 0
+
+            # Common target names
+            target_names = ("target", "label", "y", "class", "output", "outcome", "prediction", "price", "value", "score", "amount", "total", "profit", "revenue")
+            name_match = any(name in col.lower() for name in target_names)
+
+            if name_match:
+                suggestions.append({
+                    "col": col,
+                    "reason": f"Possible target (name matches)",
+                })
+            elif nunique <= 10:
+                suggestions.append({
+                    "col": col,
+                    "reason": f"Classification target ({nunique} unique values)",
+                })
+
+    # Sort by priority: name match first, then cardinality
+    suggestions.sort(key=lambda x: (
+        0 if "name matches" in x["reason"] else 1,
+        x["col"],
+    ))
+
+    return suggestions
 
 
 def _scan_and_show_datasets(path):
@@ -357,10 +443,12 @@ def _scan_and_show_datasets(path):
 
 def _run_pipeline(data, target=None, project="openml"):
     """Run the ML pipeline."""
+    from datetime import datetime
     from pathlib import Path
 
     from open_mlpipe.config.resolver import build_level1_config
     from open_mlpipe.core.pipeline import PipelineRunner
+    from open_mlpipe.utils.warning_display import LOG_DIR, WarningCollector, console_buffer, display_warnings
 
     p = Path(data)
 
@@ -374,49 +462,120 @@ def _run_pipeline(data, target=None, project="openml"):
             console.print(f"[red]No CSV/Excel files found in {data}[/red]")
             return
 
+    # ── Open session log file ──────────────────────────────────────────
+    LOG_DIR.mkdir(exist_ok=True)
+    session_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_log_path = LOG_DIR / f"pipeline_run_{session_ts}.log"
+    session_log = open(session_log_path, "w", encoding="utf-8", errors="replace")
+
+    console.print(f"\n[dim]Session log: {session_log_path}[/dim]")
+
     start_time = time.time()
-    pipeline_config = build_level1_config(data, target)
-    pipeline_config.project = project
 
-    runner = PipelineRunner(pipeline_config)
-    ctx = runner.run()
+    try:
+        pipeline_config = build_level1_config(data, target)
+        pipeline_config.project = project
 
-    print_completion_summary(ctx, start_time)
+        runner = PipelineRunner(pipeline_config)
+
+        # Expand console buffer to 9999 lines during pipeline run
+        with console_buffer():
+            ctx = runner.run()
+
+        print_completion_summary(ctx, start_time, session_log_path)
+
+    except KeyError as e:
+        session_log.close()
+        collector = WarningCollector("Pipeline Error")
+        collector.add(
+            "KeyError",
+            f"Target column '{e}' not found in dataset. Check column names and try again.",
+            source="pipeline",
+        )
+        collector.display()
+        console.print(f"\n[dim]Hint: Run 'profile' command first to see available columns.[/dim]\n")
+
+    except Exception as e:
+        session_log.close()
+        collector = WarningCollector("Pipeline Error")
+        collector.add(
+            type(e).__name__,
+            f"{e}",
+            source="pipeline",
+        )
+        collector.display()
+
+    finally:
+        if not session_log.closed:
+            session_log.flush()
+            session_log.close()
+            console.print(f"\n[dim]Full session log saved: {session_log_path}[/dim]")
 
 
 def _profile_data(data, target=None):
     """Profile a dataset."""
+    from pathlib import Path
+
     from open_mlpipe.config.schema import PipelineConfig
     from open_mlpipe.core.context import PipelineContext
     from open_mlpipe.stages.eda import EDALoaderStage
     from open_mlpipe.stages.load import DataLoaderStage
+    from open_mlpipe.utils.warning_display import WarningCollector
 
-    config = PipelineConfig(
-        project="profile",
-        data=DataConfig(path=data, target=target),
-    )
+    p = Path(data)
 
-    ctx = PipelineContext(config=config)
-    ctx = DataLoaderStage().execute(ctx)
-    ctx = EDALoaderStage().execute(ctx)
+    # If it's a directory, find the first CSV/Excel file
+    if p.is_dir():
+        csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
+        if not csv_files:
+            collector = WarningCollector("Profile Error")
+            collector.add(
+                "FileNotFoundError",
+                f"No CSV/Excel files found in {data}",
+                source="profile",
+            )
+            collector.display()
+            return
+        data = str(csv_files[0])
+        console.print(f"[dim]Using first dataset: {csv_files[0].name}[/dim]")
 
-    if ctx.eda_report:
-        console.print("\n[bold cyan]=== EDA Report ===[/bold cyan]\n")
+    if not Path(data).exists():
+        collector = WarningCollector("Profile Error")
+        collector.add(
+            "FileNotFoundError",
+            f"File not found: {data}",
+            source="profile",
+        )
+        collector.display()
+        return
 
-        quality = ctx.eda_report.get("quality", {})
-        if quality.get("missing_count"):
-            console.print("[bold]Missing Values:[/bold]")
-            for col, count in quality["missing_count"].items():
-                pct = quality["missing_pct"].get(col, 0)
-                console.print(f"  {col}: {count} ({pct}%)")
+    try:
+        config = PipelineConfig(
+            project="profile",
+            data=DataConfig(path=data, target=target),
+        )
 
-        if quality.get("n_duplicates"):
-            console.print(f"\n[bold]Duplicates:[/bold] {quality['n_duplicates']} ({quality['duplicate_pct']}%)")
+        ctx = PipelineContext(config=config)
+        ctx = DataLoaderStage().execute(ctx)
+        ctx = EDALoaderStage().execute(ctx)
 
-        if quality.get("outliers"):
-            console.print("\n[bold]Outliers:[/bold]")
-            for col, info in quality["outliers"].items():
-                console.print(f"  {col}: {info['count']} ({info['pct']}%)")
+        if ctx.eda_report:
+            console.print("\n[bold cyan]=== EDA Report ===[/bold cyan]\n")
+
+            quality = ctx.eda_report.get("quality", {})
+            if quality.get("missing_count"):
+                console.print("[bold]Missing Values:[/bold]")
+                for col, count in quality["missing_count"].items():
+                    pct = quality["missing_pct"].get(col, 0)
+                    console.print(f"  {col}: {count} ({pct}%)")
+
+            if quality.get("n_duplicates"):
+                console.print(f"\n[bold]Duplicates:[/bold] {quality['n_duplicates']} ({quality['duplicate_pct']}%)")
+
+            if quality.get("outliers"):
+                console.print("\n[bold]Outliers:[/bold]")
+                for col, info in quality["outliers"].items():
+                    console.print(f"  {col}: {info['count']} ({info['pct']}%)")
 
         dist = ctx.eda_report.get("distributions", {})
         if dist.get("highly_skewed"):
@@ -429,6 +588,15 @@ def _profile_data(data, target=None):
                 console.print(f"  {row['feature']}: {row['test']} (p={row['p_value']:.4f})")
 
         console.print("\n[bold green]Profiling complete![/bold green]")
+
+    except Exception as e:
+        collector = WarningCollector("Profile Error")
+        collector.add(
+            type(e).__name__,
+            str(e),
+            source="profile",
+        )
+        collector.display()
 
 
 if __name__ == "__main__":

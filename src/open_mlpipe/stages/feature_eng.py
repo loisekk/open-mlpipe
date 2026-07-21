@@ -7,6 +7,7 @@ import pandas as pd
 
 from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
+from open_mlpipe.utils.typing import ColumnType
 
 
 class FeatureEngStage(Stage):
@@ -25,6 +26,9 @@ class FeatureEngStage(Stage):
         if config is None:
             return ctx
 
+        # Track which columns existed before to detect new ones
+        old_cols = set(df.columns)
+
         # 1. Missingness flags
         if config.feature_engineering.missingness_flags:
             for col in df.columns:
@@ -42,6 +46,12 @@ class FeatureEngStage(Stage):
         # 4. Log transforms for highly skewed features
         if config.feature_engineering.auto_log:
             df = self._log_transforms(df, ctx)
+
+        # Register new engineered columns in ctx column-type tracking
+        new_cols = [c for c in df.columns if c not in old_cols]
+        for c in new_cols:
+            ctx.column_types[c] = ColumnType.NUMERIC
+            ctx.numeric_columns.append(c)
 
         ctx.clean_data = df
         return ctx

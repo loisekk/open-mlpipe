@@ -13,7 +13,7 @@ def load_data(path: str, **kwargs) -> pd.DataFrame:
     suffix = p.suffix.lower()
 
     loaders = {
-        ".csv": lambda: pd.read_csv(p, **kwargs),
+        ".csv": lambda: pd.read_csv(p, low_memory=False, **kwargs),
         ".parquet": lambda: pd.read_parquet(p, **kwargs),
         ".xlsx": lambda: pd.read_excel(p, **kwargs),
         ".xls": lambda: pd.read_excel(p, **kwargs),

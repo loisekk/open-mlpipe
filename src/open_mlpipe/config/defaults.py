@@ -82,17 +82,27 @@ class SmartDefaults:
         if nunique == 2 and set(series.dropna().unique()).issubset({True, False, 0, 1, "yes", "no", "True", "False"}):
             return ColumnType.BOOLEAN
 
-        # Datetime
+        # Datetime — only if most non-null values parse as dates
         if dtype_str == "datetime64[ns]":
             return ColumnType.DATETIME
         if dtype_str == "object":
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", UserWarning)
-                    pd.to_datetime(series.head(20), errors="raise", format=None)
-                return ColumnType.DATETIME
-            except (ValueError, TypeError):
-                pass
+            non_null = series.dropna()
+            if len(non_null) > 0:
+                # Real datetime columns have high cardinality (>10% unique)
+                # Low-cardinality object columns are categorical, not dates
+                unique_ratio = series.nunique() / total
+                if unique_ratio < 0.1:
+                    pass  # Likely categorical, fall through to categorical check below
+                else:
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore", UserWarning)
+                            parsed = pd.to_datetime(non_null.head(50), errors="coerce", format=None)
+                        parse_rate = parsed.notna().sum() / max(len(parsed), 1)
+                        if parse_rate > 0.5:
+                            return ColumnType.DATETIME
+                    except (ValueError, TypeError):
+                        pass
 
         # Numeric
         if dtype_str in ("float64", "int64"):
@@ -184,6 +194,7 @@ class SmartDefaults:
         - Tree models beat distance-based on mixed-type tabular data
         - KNN excluded from defaults (curse of dimensionality with OHE)
         - SVM/gaussian kernel models need adequate sample density (ratio > 20)
+          but become impractical above ~10K rows (O(n²) to O(n³) complexity)
         - Complex tree/boosting needs enough rows per feature to avoid memorization
         """
         n_feat = max(n_features_encoded or n_features, 1)
@@ -193,8 +204,8 @@ class SmartDefaults:
         if task == TaskType.CLASSIFICATION:
             models.append("logistic_regression")
 
-            # SVM needs dense coverage of input space
-            if ratio > 20:
+            # SVM: only for small-medium datasets (O(n²) too slow above ~10K rows)
+            if ratio > 20 and n_rows < 10_000:
                 models.append("svm")
 
             # Tree ensembles need enough rows per feature
@@ -206,7 +217,7 @@ class SmartDefaults:
         else:
             models.append("ridge")
 
-            if ratio > 20:
+            if ratio > 20 and n_rows < 10_000:
                 models.append("svm")
 
             if n_rows >= 1000 and ratio > 10:

@@ -34,10 +34,20 @@ class ExplainStage(Stage):
                 m = model
                 X_test_trans = X_test.values
 
+            # Subsample for speed — SHAP is O(n²) on full data
+            import numpy as np
+            max_shap_rows = 1000
+            if hasattr(X_test_trans, "shape") and X_test_trans.shape[0] > max_shap_rows:
+                rng = np.random.RandomState(42)
+                idx = rng.choice(X_test_trans.shape[0], max_shap_rows, replace=False)
+                X_shap = X_test_trans[idx]
+            else:
+                X_shap = X_test_trans
+
             # Use TreeExplainer for tree models
             if hasattr(m, "feature_importances_"):
                 explainer = shap.TreeExplainer(m)
-                shap_values = explainer.shap_values(X_test_trans)
+                shap_values = explainer.shap_values(X_shap)
 
                 # Store for later reporting
                 ctx.reports["shap_values"] = shap_values

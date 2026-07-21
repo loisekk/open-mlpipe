@@ -8,6 +8,15 @@ import time
 from rich.console import Console
 from rich.table import Table
 
+from open_mlpipe.utils.warning_display import (
+    WarningCollector,
+    capture_warnings,
+    display_warnings,
+    clear_warnings,
+    get_collector,
+    save_warning_log,
+    stderr_capture,
+)
 from open_mlpipe.config.resolver import resolve_config
 from open_mlpipe.config.schema import PipelineConfig
 from open_mlpipe.core.context import PipelineContext, StageMetadata
@@ -96,7 +105,13 @@ class PipelineRunner:
 
         start = time.time()
         try:
-            self.ctx = stage.execute(self.ctx)
+            capture_stderr = stage.name == "compare"
+            with capture_warnings(stage_name=stage.name):
+                if capture_stderr:
+                    with stderr_capture(source=stage.name):
+                        self.ctx = stage.execute(self.ctx)
+                else:
+                    self.ctx = stage.execute(self.ctx)
             elapsed = time.time() - start
             meta = StageMetadata(
                 stage_name=stage.name,
@@ -108,7 +123,16 @@ class PipelineRunner:
         except Exception as e:
             elapsed = time.time() - start
             console.print(f"  [red]FAIL {stage.name} failed after {elapsed:.1f}s: {e}[/red]")
-            raise
+            # Only re-raise for non-critical stages. Compare failure is
+            # survivable — pipeline can continue with default model selection.
+            if stage.name == "compare":
+                logger.warning("Compare stage failed: %s. Pipeline continues.", e)
+            else:
+                raise
+        finally:
+            # Display warnings after each stage
+            display_warnings()
+            clear_warnings()
 
     def _print_header(self) -> None:
         console.print("\n[bold cyan]=== mlpipe Pipeline Runner ===[/bold cyan]")
@@ -119,20 +143,52 @@ class PipelineRunner:
             console.print(f"  Target:   {self.config.data.target}")
 
     def _print_summary(self) -> None:
-        console.print("\n[bold cyan]=== Pipeline Complete ===[/bold cyan]")
+        from rich.panel import Panel
+        from rich.text import Text
 
-        table = Table(show_header=False, box=None)
-        table.add_column("Key", style="bold")
-        table.add_column("Value")
+        # Build summary content
+        lines = Text()
+        lines.append("Task                 ", style="bold")
+        lines.append(f"{self.ctx.task_type}\n", style="cyan")
 
-        table.add_row("Task", str(self.ctx.task_type))
-        table.add_row("Target", str(self.ctx.target_column))
-        table.add_row("Model", str(self.ctx.best_model_name))
-        table.add_row("Stages", str(len(self.ctx.stage_history)))
+        lines.append("Target               ", style="bold")
+        lines.append(f"{self.ctx.target_column}\n", style="cyan")
+
+        lines.append("Model                ", style="bold")
+        lines.append(f"{self.ctx.best_model_name}\n", style="green")
+
+        lines.append("Stages               ", style="bold")
+        lines.append(f"{len(self.ctx.stage_history)}\n", style="cyan")
 
         if self.ctx.metrics:
             for k, v in self.ctx.metrics.items():
                 if isinstance(v, int | float | str) and not isinstance(v, dict):
-                    table.add_row(k, f"{v:.4f}" if isinstance(v, float) else str(v))
+                    val = f"{v:.4f}" if isinstance(v, float) else str(v)
+                    # Color-code metrics
+                    if "accuracy" in k or "f1" in k or "r2" in k or "roc" in k or "mcc" in k:
+                        style = "green"
+                    elif "overfit" in k.lower():
+                        style = "yellow"
+                    elif "rmse" in k or "mae" in k or "mape" in k:
+                        style = "red"
+                    else:
+                        style = "white"
+                    lines.append(f"{k:<20}", style="bold")
+                    lines.append(f"{val}\n", style=style)
 
-        console.print(table)
+        # Save warning log
+        log_path = save_warning_log()
+        if log_path:
+            lines.append(f"\nFull log: ", style="dim")
+            lines.append(f"{log_path}", style="cyan")
+
+        panel = Panel(
+            lines,
+            title="[bold bright_cyan]=== Pipeline Complete ===[/bold bright_cyan]",
+            border_style="bright_cyan",
+            padding=(0, 1),
+            width=78,
+        )
+
+        console.print()
+        console.print(panel)

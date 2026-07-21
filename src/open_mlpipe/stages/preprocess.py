@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import warnings
 
-from sklearn.compose import ColumnTransformer
+from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, PowerTransformer, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, PowerTransformer, StandardScaler
 
 from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
@@ -82,13 +82,31 @@ class PreprocessStage(Stage):
                 ])
                 transformers.append(("cat_ohe_high", cat_ohe_pipe, high_cat_cols))
 
+        # Remaining columns: pass numeric through with median impute + scaling,
+        # drop any remaining object/string columns.
+        remainder_cols = [c for c in X_train.columns
+                          if c not in set(skewed_cols + normal_cols + other_numeric
+                                          + low_cat_cols + high_cat_cols)]
+        object_remainder = [c for c in remainder_cols if X_train[c].dtype == "object"]
+        numeric_remainder = [c for c in remainder_cols if X_train[c].dtype in ("float64", "int64")]
+
+        if object_remainder:
+            # Drop string columns that slipped through (e.g. misclassified dtypes)
+            warnings.warn(f"Dropping {len(object_remainder)} unhandled object columns: {object_remainder}")
+
+        if numeric_remainder:
+            catchall_pipe = Pipeline([
+                ("impute", SimpleImputer(strategy="median")),
+                ("scale", StandardScaler()),
+            ])
+            transformers.append(("catchall_num", catchall_pipe, numeric_remainder))
+
         if not transformers:
-            from sklearn.preprocessing import FunctionTransformer
             transformers.append(("pass", FunctionTransformer(), list(X_train.columns)))
 
         preprocessor = ColumnTransformer(
             transformers=transformers,
-            remainder="passthrough",
+            remainder="drop",
             sparse_threshold=0.3,
         )
 
