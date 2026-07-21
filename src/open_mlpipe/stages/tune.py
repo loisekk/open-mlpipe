@@ -11,10 +11,33 @@ from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
 from open_mlpipe.utils.typing import TaskType
 
+# ── Scoring metric map: config ranking_primary → sklearn scoring string ────
+_SCORING_MAP = {
+    # Regression
+    "r2": "r2",
+    "neg_root_mean_squared_error": "neg_root_mean_squared_error",
+    "neg_mean_absolute_error": "neg_mean_absolute_error",
+    "neg_mean_squared_error": "neg_mean_squared_error",
+    # Classification
+    "f1": "f1_macro",
+    "accuracy": "accuracy",
+    "roc_auc": "roc_auc",
+    "precision": "precision_macro",
+    "recall": "recall_macro",
+}
+
+
+def _resolve_scoring(ranking_primary: str, task_type: TaskType) -> str:
+    """Resolve the config's ranking_primary to a valid sklearn scoring string."""
+    if ranking_primary in _SCORING_MAP:
+        return _SCORING_MAP[ranking_primary]
+    # Pass through directly — it may already be a valid sklearn scorer name
+    return ranking_primary
+
 
 class TuneStage(Stage):
     name = "tune"
-    version = "1.0"
+    version = "1.1"
 
     def should_skip(self, ctx: PipelineContext) -> bool:
         config = ctx.config
@@ -40,6 +63,30 @@ class TuneStage(Stage):
         ):
             return ctx
 
+        # Resolve scoring metric from config
+        ranking_primary = config.model_selection.ranking_primary
+        scoring_metric = _resolve_scoring(ranking_primary, task_type)
+
+        # Resolve CV splits from config
+        n_splits = config.model_selection.cross_validation.n_splits
+        if task_type == TaskType.CLASSIFICATION:
+            cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        else:
+            cv = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+
+        # ── Baseline score (untuned model, same CV setup) ──
+        baseline_pipe = Pipeline([
+            ("preprocessor", preprocessor),
+            ("model", ctx.best_model),
+        ])
+        try:
+            baseline_scores = cross_val_score(
+                baseline_pipe, X_train, y_train, cv=cv, scoring=scoring_metric, n_jobs=1)
+            baseline_mean = float(baseline_scores.mean())
+        except Exception:
+            baseline_mean = float("-inf")
+        ctx.metrics["tune_baseline_score"] = baseline_mean
+
         # Get search space for the best model
         search_space = self._get_search_space(ctx.best_model_name, task_type)
 
@@ -59,6 +106,9 @@ class TuneStage(Stage):
                 elif param_config["type"] == "float":
                     params[param_name] = trial.suggest_float(
                         param_name, param_config["low"], param_config["high"])
+                elif param_config["type"] == "categorical":
+                    params[param_name] = trial.suggest_categorical(
+                        param_name, param_config["choices"])
 
             # Build model with suggested params
             model = self._build_model(ctx.best_model_name, params, task_type)
@@ -67,15 +117,8 @@ class TuneStage(Stage):
                 ("model", model),
             ])
 
-            if task_type == TaskType.CLASSIFICATION:
-                cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
-                scoring = "f1_macro"
-            else:
-                cv = KFold(n_splits=3, shuffle=True, random_state=42)
-                scoring = "neg_root_mean_squared_error"
-
             scores = cross_val_score(
-                pipe, X_train, y_train, cv=cv, scoring=scoring, n_jobs=1)
+                pipe, X_train, y_train, cv=cv, scoring=scoring_metric, n_jobs=1)
             return scores.mean()
 
         # Run Optuna
@@ -92,7 +135,18 @@ class TuneStage(Stage):
         study.optimize(
             objective, n_trials=int(n_trials), timeout=config.tuning.timeout)
 
-        # Build best model
+        # ── Compare tuned vs baseline — only keep if tuning improved ──
+        tuned_best_value = study.best_value
+        ctx.metrics["tuned_best_value"] = tuned_best_value
+        ctx.metrics["tuned_best_params"] = study.best_params
+
+        if tuned_best_value < baseline_mean - 1e-6:
+            print(f"    Tuning did not improve {scoring_metric}: "
+                  f"baseline={baseline_mean:.6f}, tuned={tuned_best_value:.6f}. "
+                  "Keeping untuned model.")
+            return ctx
+
+        # Build and fit the tuned model
         best_model = self._build_model(
             ctx.best_model_name, study.best_params, task_type)
         pipe = Pipeline([
@@ -102,8 +156,8 @@ class TuneStage(Stage):
         pipe.fit(X_train, y_train)
 
         ctx.tuned_model = pipe
-        ctx.metrics["tuned_best_value"] = study.best_value
-        ctx.metrics["tuned_best_params"] = study.best_params
+        print(f"    Tuning improved {scoring_metric}: "
+              f"baseline={baseline_mean:.6f} -> tuned={tuned_best_value:.6f}")
 
         return ctx
 

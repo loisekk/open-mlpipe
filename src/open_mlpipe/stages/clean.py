@@ -58,9 +58,10 @@ class CleanStage(Stage):
         return ctx
 
     def _handle_outliers(self, df, config, target_col=None):
-        """Clip outliers based on IQR method."""
+        """Clip outliers based on IQR method using config's threshold."""
         method = config.cleaning.outlier_method
         action = config.cleaning.outlier_action
+        threshold = config.cleaning.outlier_threshold
 
         if method == "auto" or method == "iqr":
             num_cols = df.select_dtypes(include=["number"]).columns
@@ -69,8 +70,8 @@ class CleanStage(Stage):
                     continue
                 Q1, Q3 = df[col].quantile(0.25), df[col].quantile(0.75)
                 IQR = Q3 - Q1
-                lower = Q1 - 1.5 * IQR
-                upper = Q3 + 1.5 * IQR
+                lower = Q1 - threshold * IQR
+                upper = Q3 + threshold * IQR
 
                 if action == "clip":
                     df[col] = df[col].clip(lower=lower, upper=upper)

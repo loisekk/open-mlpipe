@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import time
 
@@ -23,6 +24,39 @@ from rich.table import Table
 from open_mlpipe import __version__
 
 console = Console()
+
+_ANSI_STRIP = re.compile(r'\033\[[0-9;]*[a-zA-Z]')
+
+
+class _SessionTee:
+    """Write to both stdout AND a log file simultaneously.
+
+    ANSI codes are stripped for the file so it stays readable in Notepad.
+    Safely nested — only the outermost Tee closes the file.
+    """
+
+    def __init__(self, stdout, log_path) -> None:
+        self.stdout = stdout
+        self.log_file = open(log_path, "w", encoding="utf-8", errors="replace")
+        self._depth = 0
+
+    def write(self, text: str) -> None:
+        self.stdout.write(text)
+        self.log_file.write(_ANSI_STRIP.sub("", text))
+
+    def flush(self) -> None:
+        self.stdout.flush()
+        self.log_file.flush()
+
+    def close(self) -> None:
+        if self.log_file is None or self.log_file.closed:
+            return
+        self.log_file.flush()
+        self.log_file.close()
+
+    @property
+    def path(self) -> str:
+        return self.log_file.name
 
 # ═══════════════════════════════════════════════════════════════════════════
 # ASCII ART BANNER
@@ -139,6 +173,9 @@ def profile(data: str, target: str | None) -> None:
 
 def interactive_mode():
     """Interactive mode - like Qwen Code."""
+    from open_mlpipe.utils.warning_display import _expand_buffer_now
+    _expand_buffer_now()  # Buffer 9999 BEFORE any output, so banner bhi scrollback me bache
+
     print_banner()
 
     console.print("[dim]Tips: Type 'run' to start pipeline, 'profile' for EDA, 'help' for commands, 'quit' to exit[/dim]\n")
@@ -462,15 +499,17 @@ def _run_pipeline(data, target=None, project="openml"):
             console.print(f"[red]No CSV/Excel files found in {data}[/red]")
             return
 
-    # ── Open session log file ──────────────────────────────────────────
+    # ── Open session log (Tee captures ALL output) ─────────────────────
     LOG_DIR.mkdir(exist_ok=True)
     session_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_log_path = LOG_DIR / f"pipeline_run_{session_ts}.log"
-    session_log = open(session_log_path, "w", encoding="utf-8", errors="replace")
+    tee = _SessionTee(sys.stdout, session_log_path)
 
-    console.print(f"\n[dim]Session log: {session_log_path}[/dim]")
+    console.print(f"\n[dim]Session log: {tee.path}[/dim]")
+    sys.stdout = tee
 
     start_time = time.time()
+    ctx = None
 
     try:
         pipeline_config = build_level1_config(data, target)
@@ -485,7 +524,8 @@ def _run_pipeline(data, target=None, project="openml"):
         print_completion_summary(ctx, start_time, session_log_path)
 
     except KeyError as e:
-        session_log.close()
+        tee.close()
+        sys.stdout = tee.stdout  # restore before next print
         collector = WarningCollector("Pipeline Error")
         collector.add(
             "KeyError",
@@ -496,7 +536,8 @@ def _run_pipeline(data, target=None, project="openml"):
         console.print(f"\n[dim]Hint: Run 'profile' command first to see available columns.[/dim]\n")
 
     except Exception as e:
-        session_log.close()
+        tee.close()
+        sys.stdout = tee.stdout
         collector = WarningCollector("Pipeline Error")
         collector.add(
             type(e).__name__,
@@ -506,10 +547,22 @@ def _run_pipeline(data, target=None, project="openml"):
         collector.display()
 
     finally:
-        if not session_log.closed:
-            session_log.flush()
-            session_log.close()
-            console.print(f"\n[dim]Full session log saved: {session_log_path}[/dim]")
+        if tee is not None:
+            tee.close()
+            sys.stdout = tee.stdout
+            console.print(f"\n[dim]Full session log saved: {tee.path}[/dim]")
+            try:
+                console.print(
+                    Panel(
+                        "[yellow]Page Up[/yellow] terminal prompt me kaam nahi karega.\n"
+                        f"  [bold cyan]notepad {tee.path}[/bold cyan]  <- saara output yahan hai\n"
+                        "  [dim]Ya scroll wheel se terminal me scroll kar sakte ho[/dim]",
+                        title="[bold]View previous output[/bold]",
+                        border_style="dim",
+                    )
+                )
+            except UnicodeEncodeError:
+                print(f"\nView previous output: {tee.path}")
 
 
 def _profile_data(data, target=None):
@@ -559,10 +612,11 @@ def _profile_data(data, target=None):
         ctx = DataLoaderStage().execute(ctx)
         ctx = EDALoaderStage().execute(ctx)
 
-        if ctx.eda_report:
+        report = ctx.eda_report
+        if report:
             console.print("\n[bold cyan]=== EDA Report ===[/bold cyan]\n")
 
-            quality = ctx.eda_report.get("quality", {})
+            quality = report.get("quality", {})
             if quality.get("missing_count"):
                 console.print("[bold]Missing Values:[/bold]")
                 for col, count in quality["missing_count"].items():
@@ -577,17 +631,17 @@ def _profile_data(data, target=None):
                 for col, info in quality["outliers"].items():
                     console.print(f"  {col}: {info['count']} ({info['pct']}%)")
 
-        dist = ctx.eda_report.get("distributions", {})
-        if dist.get("highly_skewed"):
-            console.print(f"\n[bold]Highly Skewed:[/bold] {dist['highly_skewed']}")
+            dist = report.get("distributions", {})
+            if dist.get("highly_skewed"):
+                console.print(f"\n[bold]Highly Skewed:[/bold] {dist['highly_skewed']}")
 
-        if ctx.statistical_tests is not None:
-            console.print("\n[bold]Statistical Tests (significant features):[/bold]")
-            sig = ctx.statistical_tests[ctx.statistical_tests["significant"]]
-            for _, row in sig.iterrows():
-                console.print(f"  {row['feature']}: {row['test']} (p={row['p_value']:.4f})")
+            if ctx.statistical_tests is not None:
+                console.print("\n[bold]Statistical Tests (significant features):[/bold]")
+                sig = ctx.statistical_tests[ctx.statistical_tests["significant"]]
+                for _, row in sig.iterrows():
+                    console.print(f"  {row['feature']}: {row['test']} (p={row['p_value']:.4f})")
 
-        console.print("\n[bold green]Profiling complete![/bold green]")
+            console.print("\n[bold green]Profiling complete![/bold green]")
 
     except Exception as e:
         collector = WarningCollector("Profile Error")

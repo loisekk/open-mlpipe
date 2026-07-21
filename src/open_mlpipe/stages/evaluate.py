@@ -73,4 +73,8 @@ class EvaluateStage(Stage):
         ctx.metrics["test_rmse"] = float(np.sqrt(mean_squared_error(y_test, y_pred)))
         ctx.metrics["test_mae"] = float(mean_absolute_error(y_test, y_pred))
         ctx.metrics["test_r2"] = float(r2_score(y_test, y_pred))
-        ctx.metrics["test_mape"] = float(mean_absolute_percentage_error(y_test, y_pred) * 100)
+        # Safe MAPE: prevent infinity when y_test contains zeros
+        y_test_arr = np.asarray(y_test, dtype=np.float64)
+        y_pred_arr = np.asarray(y_pred, dtype=np.float64)
+        abs_pct_error = np.abs((y_test_arr - y_pred_arr) / np.maximum(np.abs(y_test_arr), 1e-10))
+        ctx.metrics["test_mape"] = float(np.mean(abs_pct_error) * 100)
