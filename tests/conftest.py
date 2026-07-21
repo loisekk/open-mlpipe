@@ -7,6 +7,8 @@ from pathlib import Path
 from tempfile import mkdtemp
 
 import numpy as np
+from typing import cast
+
 import pandas as pd
 import pytest
 
@@ -260,10 +262,10 @@ def split_context(
         X, y, test_size=0.2, random_state=42
     )
     ctx = clean_context
-    ctx.X_train = X_train
-    ctx.X_test = X_test
-    ctx.y_train = y_train
-    ctx.y_test = y_test
+    ctx.X_train = cast(pd.DataFrame, X_train)
+    ctx.X_test = cast(pd.DataFrame, X_test)
+    ctx.y_train = cast(pd.Series, y_train)
+    ctx.y_test = cast(pd.Series, y_test)
     ctx.numeric_columns = ["feat_a", "feat_b"]
     ctx.categorical_columns = ["cat_x"]
     return ctx

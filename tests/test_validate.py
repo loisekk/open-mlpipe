@@ -44,7 +44,7 @@ def test_validate_detects_duplicates():
     # 5 duplicate pairs -> 50% dup rate
     rows = [[25, 50], [25, 50], [30, 60], [30, 60], [35, 70],
             [35, 70], [40, 80], [40, 80], [45, 90], [45, 90]]
-    df = pd.DataFrame(rows, columns=["age", "income"])
+    df = pd.DataFrame(rows, columns=pd.Index(["age", "income"]))
     df["target"] = [0, 0, 1, 1, 1, 0, 0, 1, 1, 1]
 
     ctx = PipelineContext()

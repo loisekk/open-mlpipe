@@ -27,6 +27,7 @@ def test_execute_creates_missingness_flags():
     ctx = PipelineContext(config=config, clean_data=df, target_column="target", column_types={})
     stage = FeatureEngStage()
     result = stage.execute(ctx)
+    assert result.clean_data is not None
 
     assert "was_missing_feat_a" in result.clean_data.columns
     assert "was_missing_feat_b" in result.clean_data.columns
@@ -51,6 +52,7 @@ def test_execute_creates_datetime_features():
     )
     stage = FeatureEngStage()
     result = stage.execute(ctx)
+    assert result.clean_data is not None
 
     assert "date_year" in result.clean_data.columns
     assert "date_month" in result.clean_data.columns
@@ -80,6 +82,7 @@ def test_execute_applies_log_transforms_to_skewed_columns():
     )
     stage = FeatureEngStage()
     result = stage.execute(ctx)
+    assert result.clean_data is not None
 
     assert "log_feat_a" in result.clean_data.columns
 

@@ -304,15 +304,21 @@ import ctypes
 import ctypes.wintypes
 
 _PIPE_LINES = 9999
-_RESTORE_LINES = 9001  # slightly less than max to avoid pushback on restore
 
 # Win32 console API types
 _SHORT = ctypes.wintypes.SHORT
 _WORD = ctypes.wintypes.WORD
 _DWORD = ctypes.wintypes.DWORD
 _HANDLE = ctypes.wintypes.HANDLE
-_STD_OUTPUT_HANDLE = _DWORD(-11)
-_STD_ERROR_HANDLE = _DWORD(-12)
+_LPCWSTR = ctypes.wintypes.LPCWSTR
+_LPVOID = ctypes.wintypes.LPVOID
+
+# Win32 constants for CreateFileW
+_GENERIC_READ = 0x80000000
+_GENERIC_WRITE = 0x40000000
+_FILE_SHARE_READ = 1
+_FILE_SHARE_WRITE = 2
+_OPEN_EXISTING = 3
 
 
 class _COORD(ctypes.Structure):
@@ -338,9 +344,28 @@ class _CONSOLE_SCREEN_BUFFER_INFO(ctypes.Structure):
     ]
 
 _kernel32 = ctypes.windll.kernel32
-_GetStdHandle = _kernel32.GetStdHandle
+_kernel32.CreateFileW.restype = _HANDLE
+_kernel32.CreateFileW.argtypes = [_LPCWSTR, _DWORD, _DWORD, ctypes.c_void_p, _DWORD, _DWORD, _HANDLE]
+_CreateFileW = _kernel32.CreateFileW
 _GetConsoleScreenBufferInfo = _kernel32.GetConsoleScreenBufferInfo
 _SetConsoleScreenBufferSize = _kernel32.SetConsoleScreenBufferSize
+_CloseHandle = _kernel32.CloseHandle
+
+
+def _open_console_handle() -> int | None:
+    """Open CONOUT$ directly — works even when GetStdHandle doesn't return a real console handle."""
+    handle = _CreateFileW(
+        "CONOUT$",
+        _GENERIC_READ | _GENERIC_WRITE,
+        _FILE_SHARE_READ | _FILE_SHARE_WRITE,
+        None,
+        _OPEN_EXISTING,
+        0,
+        None,
+    )
+    if handle in (-1, 0, None):
+        return None
+    return handle
 
 
 def _get_console_buffer_info(handle: int) -> _CONSOLE_SCREEN_BUFFER_INFO | None:
@@ -358,48 +383,46 @@ def _set_console_buffer_height(handle: int, height: int) -> None:
     _SetConsoleScreenBufferSize(_HANDLE(handle), new_size)
 
 
-class console_buffer:
-    """Context manager that expands Windows console scrollback during a block.
+def _expand_buffer_now() -> None:
+    """Fire-and-forget: expand console scrollback to 9999 immediately.
 
-    Sets the stdout and stderr console buffer to 9999 lines on enter,
-    restores to 9001 on exit. On non-Windows or when not attached to
-    a console (e.g., piping to file), this is a no-op.
+    Call this at the very start of interactive/CLI entry, BEFORE any output.
+    No context manager needed — ek baar set, permanently.
+    """
+    handle = _open_console_handle()
+    if handle is not None:
+        csbi = _get_console_buffer_info(handle)
+        if csbi is not None:
+            old_buffer = csbi.dwSize.Y
+            if old_buffer != _PIPE_LINES:
+                _set_console_buffer_height(handle, _PIPE_LINES)
+                print(f"\033[2mConsole: scrollback {old_buffer} -> {_PIPE_LINES}\033[0m")
+        _CloseHandle(handle)
+
+
+class console_buffer:
+    """Context manager that expands Windows console scrollback to 9999 lines.
+
+    Uses CreateFileW("CONOUT$") to open the real console screen buffer directly
+    — works in all Windows terminals (CMD, PowerShell, Windows Terminal, etc.),
+    even when Python's stdout is piped or redirected. No restore — ek baar set,
+    permanently. Piped subprocess (OpenCode me) silent no-op.
+
+    **Does NOT maximize window or change viewport** — sirf buffer badhata hai
+    taaki scrollback me purana content erase na ho.
 
     Usage:
         with console_buffer():
-            run_pipeline()  # output stays fully scrollable
+            run_pipeline()
     """
 
     def __init__(self) -> None:
-        self._old_stdout_height: int | None = None
-        self._old_stderr_height: int | None = None
-        self._stdout_handle: int | None = None
-        self._stderr_handle: int | None = None
+        self._handle: int | None = None
 
     def __enter__(self) -> console_buffer:
-        try:
-            self._stdout_handle = _GetStdHandle(_STD_OUTPUT_HANDLE)
-            if self._stdout_handle:
-                csbi = _get_console_buffer_info(self._stdout_handle)
-                if csbi is not None:
-                    self._old_stdout_height = csbi.dwSize.Y
-                    _set_console_buffer_height(self._stdout_handle, _PIPE_LINES)
-        except OSError:
-            self._stdout_handle = None
-
-        try:
-            self._stderr_handle = _GetStdHandle(_STD_ERROR_HANDLE)
-            if self._stderr_handle and self._stderr_handle != self._stdout_handle:
-                _set_console_buffer_height(self._stderr_handle, _PIPE_LINES)
-        except OSError:
-            self._stderr_handle = None
-
+        _expand_buffer_now()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
-        if self._stdout_handle and self._old_stdout_height is not None:
-            try:
-                _set_console_buffer_height(self._stdout_handle, _RESTORE_LINES)
-            except OSError:
-                pass
+        # No restore — user ne kaha buffer 9999 hi rahe permanently
         return False

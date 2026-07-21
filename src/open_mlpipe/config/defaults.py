@@ -248,7 +248,7 @@ class SmartDefaults:
     def default_metric(task: TaskType) -> str:
         if task == TaskType.CLASSIFICATION:
             return "f1_macro"
-        return "neg_root_mean_squared_error"
+        return "r2"
 
     @staticmethod
     def default_scoring(task: TaskType) -> list[str]:

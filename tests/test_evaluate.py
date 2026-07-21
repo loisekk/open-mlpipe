@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import cast
+
+import pandas as pd
 import pytest
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -91,10 +94,10 @@ class TestEvaluateStage:
         X = df.drop(columns=["target"])
         y = df["target"]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        ctx.X_train = X_train
-        ctx.X_test = X_test
-        ctx.y_train = y_train
-        ctx.y_test = y_test
+        ctx.X_train = cast(pd.DataFrame, X_train)
+        ctx.X_test = cast(pd.DataFrame, X_test)
+        ctx.y_train = cast(pd.Series, y_train)
+        ctx.y_test = cast(pd.Series, y_test)
         ctx.task_type = TaskType.CLASSIFICATION
         ctx.numeric_columns = ["x1", "x2"]
         ctx.categorical_columns = ["cat_a", "cat_b"]

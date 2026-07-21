@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from open_mlpipe.config.resolver import build_level1_config, load_config, resolve_config
-from open_mlpipe.config.schema import PipelineConfig
+from open_mlpipe.config.schema import DataConfig, PipelineConfig
 
 
 @pytest.mark.unit
@@ -153,7 +153,7 @@ def test_resolve_config_auto_task_from_yaml():
     try:
         config = PipelineConfig(
             project="test",
-            data={"path": temp_path, "target": "target"},
+            data=DataConfig(path=temp_path, target="target"),
         )
         assert config.task == "auto"
 

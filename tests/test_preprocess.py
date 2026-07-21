@@ -24,7 +24,8 @@ class TestPreprocessStage:
         stage = PreprocessStage()
         ctx = stage.execute(split_context)
         assert isinstance(ctx.preprocessor, ColumnTransformer)
-        assert len(ctx.preprocessor.transformers) >= 1
+        transformers = getattr(ctx.preprocessor, "transformers", [])
+        assert len(transformers) >= 1
 
     @pytest.mark.unit
     def test_should_skip_defaults_to_false(self, split_context):

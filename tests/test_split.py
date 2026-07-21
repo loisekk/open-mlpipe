@@ -30,7 +30,10 @@ def test_execute_creates_train_test_splits(clean_context):
     assert len(result.X_test) > 0
     assert len(result.y_train) > 0
     assert len(result.y_test) > 0
-    assert len(result.X_train) + len(result.X_test) == len(clean_context.clean_data)
+    total = len(result.X_train) + len(result.X_test)
+    original = clean_context.clean_data
+    assert original is not None
+    assert total == len(original)
 
 
 @pytest.mark.unit
@@ -77,8 +80,11 @@ def test_test_size_adjusted_for_small_datasets(clean_context):
     stage = SplitStage()
     result = stage.execute(clean_context)
 
-    n = len(clean_context.clean_data)
+    cd = clean_context.clean_data
+    assert cd is not None
+    n = len(cd)
     expected_test = int(n * 0.1)
+    assert result.X_test is not None
     assert len(result.X_test) == expected_test
 
 

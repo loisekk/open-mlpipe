@@ -75,9 +75,15 @@ class TuneStage(Stage):
             cv = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
         # ── Baseline score (untuned model, same CV setup) ──
+        # ctx.best_model is a fitted Pipeline from CompareStage.
+        # Extract the raw model to avoid double-preprocessing.
+        try:
+            raw_baseline_model = ctx.best_model.named_steps["model"]
+        except (AttributeError, KeyError):
+            raw_baseline_model = ctx.best_model
         baseline_pipe = Pipeline([
             ("preprocessor", preprocessor),
-            ("model", ctx.best_model),
+            ("model", raw_baseline_model),
         ])
         try:
             baseline_scores = cross_val_score(

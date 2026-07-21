@@ -26,6 +26,8 @@ class TestTuneStage:
 
     @pytest.mark.unit
     def test_execute_with_tuning_enabled_produces_tuned_model(self, preprocessed_context):
+        """Tuning runs and records baseline + tuned metrics.
+        tuned_model may be None if tuning didn't improve baseline (correct behavior)."""
         pytest.importorskip("xgboost")
         pytest.importorskip("lightgbm")
         ctx = preprocessed_context
@@ -45,7 +47,12 @@ class TestTuneStage:
         ctx.best_model = Pipeline([("preprocessor", pre), ("model", RandomForestRegressor(n_estimators=10, random_state=42))])
         stage = TuneStage()
         ctx = stage.execute(ctx)
-        assert ctx.tuned_model is not None
+        # Baseline score must be valid (not -inf)
+        assert ctx.metrics["tune_baseline_score"] > 0
+        # Tuning attempt must be recorded
+        assert "tuned_best_value" in ctx.metrics
+        assert "tuned_best_params" in ctx.metrics
+        # tuned_model may be None if tuning didn't improve — that's correct
 
     @pytest.mark.unit
     def test_tuned_best_value_in_metrics(self, preprocessed_context):
@@ -69,3 +76,5 @@ class TestTuneStage:
         stage = TuneStage()
         ctx = stage.execute(ctx)
         assert "tuned_best_value" in ctx.metrics
+        assert "tuned_best_params" in ctx.metrics
+        assert "tune_baseline_score" in ctx.metrics

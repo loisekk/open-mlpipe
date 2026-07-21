@@ -23,7 +23,15 @@ from rich.table import Table
 
 from open_mlpipe import __version__
 
-console = Console()
+# Force Rich to use UTF-8 on Windows instead of legacy cp1252 rendering
+console = Console(force_terminal=True, legacy_windows=False)
+# Also reconfigure stdio for UTF-8 on Windows
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except Exception:
+        pass  # If stderr is not a real TextIOWrapper (redirected), skip
 
 _ANSI_STRIP = re.compile(r'\033\[[0-9;]*[a-zA-Z]')
 
