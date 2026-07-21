@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pandas as pd
 import pytest
 
 from open_mlpipe.core.context import PipelineContext
@@ -37,7 +38,7 @@ def test_concrete_stage_version():
 @pytest.mark.unit
 def test_should_skip_returns_true_when_raw_data_present():
     stage = _TestConcreteStage()
-    ctx = PipelineContext(raw_data=object())  # any non-None value
+    ctx = PipelineContext(raw_data=pd.DataFrame({"a": [1, 2]}))
     assert stage.should_skip(ctx) is True
 
 
