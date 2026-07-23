@@ -179,6 +179,112 @@ def profile(data: str, target: str | None) -> None:
     _profile_data(data, target)
 
 
+@main.command()
+@click.option("--n", "-n", default=5, help="Number of logs to show")
+def _list_logs(n: int = 5) -> None:
+    """Helper: list recent pipeline session logs."""
+    from pathlib import Path
+
+    from open_mlpipe.utils.warning_display import LOG_DIR
+
+    log_dir = Path(LOG_DIR)
+    if not log_dir.exists():
+        console.print("[yellow]No session logs found.[/yellow]")
+        return
+
+    log_files = sorted(log_dir.glob("pipeline_run_*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if not log_files:
+        console.print("[yellow]No session logs found.[/yellow]")
+        return
+
+    table = Table(title=f"Recent Session Logs (last {len(log_files[:n])})", border_style="dim")
+    table.add_column("#", style="dim")
+    table.add_column("Timestamp", style="cyan")
+    table.add_column("Size", style="green")
+    table.add_column("Path", style="bright_blue")
+
+    for i, f in enumerate(log_files[:n], 1):
+        ts = f.stem.replace("pipeline_run_", "").replace("_", " ").replace("-", ":")
+        size = f.stat().st_size
+        size_str = f"{size:,} bytes" if size < 1024 else f"{size/1024:.1f} KB"
+        table.add_row(str(i), ts, size_str, str(f))
+
+    console.print()
+    console.print(table)
+    latest = log_files[0]
+    console.print("\n[dim]View latest log (interactive pager):[/dim] [cyan]openml view[/cyan]")
+    console.print(f"[dim]Open in Notepad:[/dim] [cyan]notepad {latest}[/cyan]")
+
+
+def _show_log(log_file: str | None = None) -> None:
+    """Helper: display a session log using the built-in interactive pager."""
+    from pathlib import Path
+
+    from open_mlpipe.utils.pager import _read_last_session_path, view_log
+    from open_mlpipe.utils.warning_display import LOG_DIR
+
+    log_dir = Path(LOG_DIR)
+    if not log_dir.exists():
+        console.print("[yellow]No session logs directory found.[/yellow]")
+        return
+
+    log_files = sorted(log_dir.glob("pipeline_run_*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if not log_files:
+        console.print("[yellow]No session logs found.[/yellow]")
+        return
+
+    if log_file:
+        matches = [f for f in log_files if log_file in f.name]
+        if not matches:
+            console.print(f"[red]No log file matching '{log_file}'. Use `openml logs` to list them.[/red]")
+            return
+        target = matches[0]
+    else:
+        # Prefer last session marker, fall back to latest file
+        last = _read_last_session_path()
+        target = last if last and last.exists() else log_files[0]
+
+    # Show brief header, then launch pager
+    console.print(f"\n[bold cyan]Viewing: {target.name} ({target.stat().st_size:,} bytes)[/bold cyan]")
+    console.print("[dim]↑↓ scroll  / search  q quit  PgUp/PgDn page  g/G top/bottom[/dim]\n")
+
+    # Brief pause so user reads header before pager takes over
+    import time as _time
+    _time.sleep(0.6)
+
+    view_log(target)
+
+
+@main.command()
+@click.option("--n", "-n", default=5, help="Number of logs to show")
+def logs(n: int) -> None:
+    """List recent pipeline session logs."""
+    _list_logs(n)
+
+
+@main.command()
+@click.argument("log_file", required=False)
+def show_log(log_file: str | None) -> None:
+    """Display a session log in the interactive pager.
+
+    Pass a partial filename (e.g., pipeline_run_20260401_123045)
+    or omit to view the most recent log.
+
+    Pager keys: arrow keys scroll, / search, q quit, g/G top/bottom.
+    """
+    _show_log(log_file)
+
+
+@main.command()
+def view() -> None:
+    """View the most recent pipeline session log in the interactive pager.
+
+    Shortcut for `openml show-log` — opens the last run's full output.
+    Pager keys: arrow keys scroll, / search, q quit, g/G top/bottom.
+    """
+    _show_log(None)
+
+
 def interactive_mode():
     """Interactive mode - like Qwen Code."""
     from open_mlpipe.utils.warning_display import _expand_buffer_now
@@ -203,14 +309,18 @@ def interactive_mode():
                 console.print("""
 [bold]Available Commands:[/bold]
 
-  [green]run[/green]      - Run the full ML pipeline
-  [green]profile[/green]  - Profile a dataset (EDA only)
-  [green]help[/green]     - Show this help
-  [green]quit[/green]     - Exit
+  [green]run[/green]         - Run the full ML pipeline
+  [green]profile[/green]     - Profile a dataset (EDA only)
+  [green]view[/green]        - View the most recent session log (interactive pager)
+  [green]logs[/green]        - List recent session logs
+  [green]show-log[/green]    - View a specific session log (interactive pager)
+  [green]help[/green]        - Show this help
+  [green]quit[/green]        - Exit
 
 [bold]Quick Start:[/bold]
   > run --data dataset.csv --target column_name
   > profile --data dataset.csv
+  > view   (after running a pipeline — browse all output)
 """)
                 continue
 
@@ -351,6 +461,26 @@ def interactive_mode():
                     console.print("[red]Please provide --data parameter[/red]")
                 continue
 
+            if user_input.lower() in ("view", "v"):
+                from open_mlpipe.utils.pager import _read_last_session_path, view_log
+
+                target = _read_last_session_path()
+                if target and target.exists():
+                    view_log(target)
+                else:
+                    console.print("[yellow]No session log found. Run a pipeline first.[/yellow]")
+                continue
+
+            if user_input.lower() in ("logs", "log"):
+                _list_logs(n=5)
+                continue
+
+            if user_input.lower().startswith("show-log"):
+                parts = user_input.split()
+                log_arg = parts[1] if len(parts) > 1 else None
+                _show_log(log_arg)
+                continue
+
             console.print(f"[red]Unknown command: {user_input}[/red]")
             console.print("[dim]Type 'help' for available commands[/dim]")
 
@@ -404,7 +534,7 @@ def _suggest_target_columns(df):
             if name_match:
                 suggestions.append({
                     "col": col,
-                    "reason": f"Possible target (name matches)",
+                    "reason": "Possible target (name matches)",
                 })
             elif nunique <= 10:
                 suggestions.append({
@@ -493,7 +623,11 @@ def _run_pipeline(data, target=None, project="openml"):
 
     from open_mlpipe.config.resolver import build_level1_config
     from open_mlpipe.core.pipeline import PipelineRunner
-    from open_mlpipe.utils.warning_display import LOG_DIR, WarningCollector, console_buffer, display_warnings
+    from open_mlpipe.utils.warning_display import (
+        LOG_DIR,
+        WarningCollector,
+        console_buffer,
+    )
 
     p = Path(data)
 
@@ -526,10 +660,21 @@ def _run_pipeline(data, target=None, project="openml"):
         runner = PipelineRunner(pipeline_config)
 
         # Expand console buffer to 9999 lines during pipeline run
+        import signal as _signal
+
+        def _handle_interrupt(sig, frame):
+            raise KeyboardInterrupt()
+
+        _signal.signal(_signal.SIGINT, _handle_interrupt)
+
         with console_buffer():
             ctx = runner.run()
 
         print_completion_summary(ctx, start_time, session_log_path)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Pipeline interrupted by user. Cleaning up...[/yellow]")
+        # Fall through to finally for cleanup
 
     except KeyError as e:
         tee.close()
@@ -541,7 +686,7 @@ def _run_pipeline(data, target=None, project="openml"):
             source="pipeline",
         )
         collector.display()
-        console.print(f"\n[dim]Hint: Run 'profile' command first to see available columns.[/dim]\n")
+        console.print("\n[dim]Hint: Run 'profile' command first to see available columns.[/dim]\n")
 
     except Exception as e:
         tee.close()
@@ -559,18 +704,33 @@ def _run_pipeline(data, target=None, project="openml"):
             tee.close()
             sys.stdout = tee.stdout
             console.print(f"\n[dim]Full session log saved: {tee.path}[/dim]")
+
+            # Auto-offer interactive log viewer
+            from open_mlpipe.utils.pager import _save_last_session_path, view_log
+
+            _save_last_session_path(Path(tee.path))
+
             try:
                 console.print(
                     Panel(
-                        "[yellow]Page Up[/yellow] terminal prompt me kaam nahi karega.\n"
-                        f"  [bold cyan]notepad {tee.path}[/bold cyan]  <- saara output yahan hai\n"
-                        "  [dim]Ya scroll wheel se terminal me scroll kar sakte ho[/dim]",
-                        title="[bold]View previous output[/bold]",
-                        border_style="dim",
+                        "[bold green]v[/bold green] = view full log in interactive pager\n"
+                        "  [dim]↑↓ scroll  / search  q quit  PgUp/PgDn page[/dim]",
+                        title="[bold]View pipeline output[/bold]",
+                        border_style="bright_green",
                     )
                 )
             except UnicodeEncodeError:
-                print(f"\nView previous output: {tee.path}")
+                print("\nType 'view' or 'openml show-log' to browse the full log.")
+
+            # Offer immediate viewing
+            try:
+                answer = console.input(
+                    "\n[bold green]View full output now? (y/n)[/bold green] "
+                ).strip().lower()
+                if answer in ("y", "yes", ""):
+                    view_log(tee.path)
+            except (KeyboardInterrupt, EOFError):
+                pass
 
 
 def _profile_data(data, target=None):
