@@ -114,6 +114,10 @@ Raw CSV → Load → EDA → Clean → Feature Eng → Split → Preprocess
 
 ## Terminal preview
 
+https://github.com/yashb/mlpipe/assets/openml-demo.mp4
+
+<img width="1672" height="941" alt="openml CLI running pipeline" src="docs/assets/openml-terminal.png" />
+
 ```
 >> load          OK (0.1s)
 >> eda           OK (0.2s)
