@@ -116,7 +116,7 @@ Raw CSV → Load → EDA → Clean → Feature Eng → Split → Preprocess
 
 ### Interactive mode — run a pipeline
 
-🎥 [Watch the CLI demo (mp4)](assets/openml-demo.mp4)
+https://github.com/loisekk/open-mlpipe/releases/download/v1.0.6/openml-demo.mp4
 
 ### Pipeline output — model comparison + save
 
