@@ -120,7 +120,7 @@ https://github.com/user-attachments/assets/68fe7370-fc1e-4689-855e-1f2baa6bc73f
 
 ### Pipeline output — model comparison + save
 
-<img width="1672" height="941" alt="openml pipeline output" src="docs/assets/openml-terminal-output.png" />
+<img width="1379" height="1048" alt="openml terminal screenshot" src="https://github.com/user-attachments/assets/db79f5a9-95be-4f51-95a8-cf0670bc811a" />
 
 
 ```
