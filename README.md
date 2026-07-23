@@ -114,7 +114,13 @@ Raw CSV → Load → EDA → Clean → Feature Eng → Split → Preprocess
 
 ## Terminal preview
 
-> 🎥 [Watch the CLI demo](docs/assets/openml-demo.mp4)
+### Interactive mode — run a pipeline
+
+https://github.com/user-attachments/assets/openml-demo.mp4
+
+### Pipeline output — model comparison + save
+
+<img width="1672" height="941" alt="openml pipeline output" src="docs/assets/openml-terminal-output.png" />
 
 
 ```

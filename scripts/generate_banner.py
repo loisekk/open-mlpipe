@@ -56,19 +56,41 @@ def generate_banner():
     draw.text((padding, padding - 20), "// INITIATING OPENML PIPE...", fill=(148, 163, 184), font=font_label)
     draw.text((width - padding - 80, padding - 20), "openml v1.0.6", fill=ACCENT_COLOR, font=font_label)
 
-    # Draw ASCII art
-    y = padding + 30
+    # Center the ASCII art vertically and horizontally
+    # Calculate total ASCII art height
+    line_height = 28
+    total_art_height = len(ascii_art) * line_height
+
+    # Calculate total content height (art + subtitle)
+    subtitle_height = 30
+    total_content_height = total_art_height + 20 + subtitle_height
+
+    # Center vertically within the available space (below top labels, above bottom)
+    art_start_y = padding + 30 + (height - padding - 30 - total_art_height - 50) // 2
+
+    # Find the widest line of ASCII art for horizontal centering
+    max_art_width = 0
+    for line in ascii_art:
+        bbox = draw.textbbox((0, 0), line, font=font_art)
+        line_width = bbox[2] - bbox[0]
+        if line_width > max_art_width:
+            max_art_width = line_width
+
+    # Center horizontally
+    art_start_x = (width - max_art_width) // 2
+
+    # Draw ASCII art centered
+    y = art_start_y
     for line in ascii_art:
         # Shadow effect — offset darker version
-        draw.text((padding + 2, y + 2), line, fill=BANNER_SHADOW, font=font_art)
+        draw.text((art_start_x + 2, y + 2), line, fill=BANNER_SHADOW, font=font_art)
         # Main text
-        draw.text((padding, y), line, fill=BANNER_COLOR, font=font_art)
-        y += 28
+        draw.text((art_start_x, y), line, fill=BANNER_COLOR, font=font_art)
+        y += line_height
 
-    # Draw subtitle (like AIDEN: "Autonomous AI Engine" → "Production ML Pipeline")
+    # Draw subtitle centered below ASCII art
     y += 20
     for line in subtitle_lines:
-        # Center the subtitle
         bbox = draw.textbbox((0, 0), line, font=font_sub)
         text_width = bbox[2] - bbox[0]
         x = (width - text_width) // 2
