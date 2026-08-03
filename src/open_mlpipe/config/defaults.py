@@ -231,15 +231,24 @@ class SmartDefaults:
     # ── Tuning Budget ──
 
     @staticmethod
-    def allocate_tuning_budget(n_rows: int, n_features: int) -> int:
-        """Pick Optuna trial count based on data complexity."""
+    def allocate_tuning_budget(n_rows: int, n_features: int, n_search_dims: int = 0) -> int:
+        """Pick Optuna trial count based on data complexity + search space.
+
+        Wider search spaces need more trials to explore -- 11 RF dims vs 2
+        ridge dims is a 5x difference. With MedianPruner killing early, each
+        trial is ~40% cheaper so we can afford more trials per timeout.
+        Gradient is ~2 trials per dim above 3 to keep big-data from timing out.
+        """
         base = min(n_features * 2, 50)
+        # ~2 trials per dim above 3; pruner makes early failures cheap
+        if n_search_dims > 3:
+            base = max(base, 18 + n_search_dims * 2)
         if n_rows < 1_000:
-            return max(20, base)
+            return max(25, base)
         if n_rows < 10_000:
-            return max(30, base)
+            return max(40, base)
         if n_rows < 100_000:
-            return max(50, base)
+            return max(60, base)
         return max(80, base)
 
     # ── Metric Selection ──
