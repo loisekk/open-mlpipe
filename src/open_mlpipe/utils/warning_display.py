@@ -6,7 +6,6 @@ import warnings
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +17,88 @@ console = Console(width=80)
 
 MAX_WARNINGS_IN_BOX = 3
 LOG_DIR = Path("logs")
+
+
+def fmt_metric(name: str, value) -> str:
+    """Format a pipeline metric for display. Smart rounding by name + magnitude.
+
+    - mape: shown as %, at most 2 dp
+    - r2 / accuracy / f1 / roc_auc / mcc: 4 dp (small ranges)
+    - rmse / mae / scores: round to 4 sig digits, group thousands on big values
+    ponytail: callers used 4-dp for everything -> 8.9e15 mapele / 985579.5085 looked
+    insane. One helper beat 6 per-site f-strings.
+    """
+    if not isinstance(value, (int, float)):
+        return str(value)
+    key = (name or "").lower()
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    # Percentage metric (lower=better). Cap insanity at scientific notation,
+    # normal range is 0..100% so add the % suffix for production-style display.
+    if "mape" in key:
+        if abs(f) >= 1e6:
+            return f"{f:.2e}"
+        return f"{f:.2f}%"
+    # Score-like 0..1 (or -inf..1 for r2): keep on 0..1 scale, 2 dp.
+    # 2 dp surfaces overfit (1.00) and underfit (<0.50) at a glance.
+    if any(k in key for k in ("r2", "accuracy", "f1", "roc_auc", "mcc")):
+        return f"{f:.2f}"
+    # Errors / counts / time: raw value in target units, 2 dp + thousands separators
+    # (production print style: RMSE = 985,579.51 reads as $985K mismatch)
+    if abs(f) >= 100:
+        return f"{f:,.2f}"
+    return f"{f:.4f}"
+
+
+def fmt_compact(name: str, value) -> str:
+    """Business-friendly abbreviation of large error/count metrics.
+
+    Used in the model comparison table so execs can scan RMSE/MAE columns
+    without counting digits: ``217,742.06`` -> ``217.7K``, ``1,180,000`` -> ``1.18M``.
+    Score metrics (R2/Accuracy/F1/ROC_AUC/MCC) stay on the 0..1 scale -- they
+    already read cleanly -- so this only touches error/loss/count metrics.
+
+    Convention (Kaggle dashboards, Stripe / Datadog / Grafana defaults):
+      < 1K      -> raw 2-dp                 217.74
+      1K..1M    -> K suffix, 1 dp          217.7K
+      1M..1B    -> M suffix, 2 dp          1.18M
+      >= 1B     -> B suffix, 2 dp           2.40B
+      NaN/inf   -> 'nan' / 'inf'           nan
+    """
+    if not isinstance(value, (int, float)):
+        return str(value)
+    key = (name or "").lower()
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    # Score-like 0..1 metrics stay 2-dp (R2 etc.) -- fmt_metric handles them,
+    # but the comparison table routes everything through fmt_compact so keep
+    # the same shape here for consistency.
+    if any(k in key for k in ("r2", "accuracy", "f1", "roc_auc", "mcc")):
+        return f"{f:.2f}"
+    if "mape" in key:
+        if abs(f) >= 1e6:
+            return f"{f:.2e}"
+        return f"{f:.2f}%"
+    # NaN / inf
+    if f != f:  # NaN
+        return "nan"
+    if f in (float("inf"), float("-inf")):
+        return "inf"
+    a = abs(f)
+    if a >= 1e9:
+        return f"{f/1e9:.2f}B"
+    if a >= 1e6:
+        return f"{f/1e6:.2f}M"
+    if a >= 1e3:
+        return f"{f/1e3:.1f}K"
+    # Small enough to read raw -- 2 dp, no thousands group (no noise)
+    if a >= 100:
+        return f"{f:,.2f}"
+    return f"{f:.2f}"
 
 EXPLANATIONS: dict[str, dict[str, str]] = {
     "mixed_types": {"label": "Mixed column types", "fix": "low_memory=False reads full CSV."},
@@ -58,7 +139,7 @@ def _match(message: str) -> str | None:
     return None
 
 
-class stderr_capture:
+class stderr_capture:  # noqa: N801 - matches Win32 API capturing convention
     """Context manager that redirects stderr to a temp file to capture threaded output.
 
     Replaces sys.stderr with a real file handle (opened with open()), so ALL
@@ -279,9 +360,26 @@ def capture_warnings(stage_name: str = ""):
         except Exception:
             raise
         finally:
+            # Cosmetic warnings that are not actionable and just dirty the
+            # pipeline output. Filtered here so they never reach the warning
+            # panel. Add new patterns to this set as they surface.
+            _cosmetic_markers = (
+                "multivariate",            # Optuna TPE experimental feature
+                "SettingWithCopy",         # pandas false-positive on .loc assigns
+                "X does not have valid feature names",  # LightGBM sklearn API
+                "artifact_path is deprecated",  # MLflow log_model rename
+                "_readerthread",           # loky/joblib thread cleanup on Windows
+                "Could not find the number of physical cores",  # joblib Win32
+                "invalid value encountered in",  # numpy divide in MAPE (y_true~0)
+                "divide by zero encountered in",  # numpy divide in MAPE
+                "skops_trusted_types",      # MLflow skops security prompt
+            )
             for w in w_list:
+                msg = str(w.message)
+                if any(marker in msg for marker in _cosmetic_markers):
+                    continue
                 cat = w.category.__name__ if hasattr(w.category, "__name__") else str(w.category)
-                _collector.add(cat, str(w.message), source=stage_name)
+                _collector.add(cat, msg, source=stage_name)
 
 
 def display_warnings() -> None:
@@ -300,8 +398,8 @@ def save_warning_log() -> str | None:
 # Windows console buffer management — prevents scrollback loss during pipeline
 # ═══════════════════════════════════════════════════════════════════════════
 
-import ctypes
-import ctypes.wintypes
+import ctypes  # noqa: E402 - loaded late so non-Windows OSes don't pay the ctypes import cost
+import ctypes.wintypes  # noqa: E402
 
 _PIPE_LINES = 9999
 
@@ -325,7 +423,7 @@ class _COORD(ctypes.Structure):
     _fields_ = [("X", _SHORT), ("Y", _SHORT)]
 
 
-class _SMALL_RECT(ctypes.Structure):
+class _SMALL_RECT(ctypes.Structure):  # noqa: N801 - mirrors Win32 SMALL_RECT
     _fields_ = [
         ("Left", _SHORT),
         ("Top", _SHORT),
@@ -334,7 +432,7 @@ class _SMALL_RECT(ctypes.Structure):
     ]
 
 
-class _CONSOLE_SCREEN_BUFFER_INFO(ctypes.Structure):
+class _CONSOLE_SCREEN_BUFFER_INFO(ctypes.Structure):  # noqa: N801 - mirrors Win32 CONSOLE_SCREEN_BUFFER_INFO
     _fields_ = [
         ("dwSize", _COORD),
         ("dwCursorPosition", _COORD),
@@ -400,7 +498,7 @@ def _expand_buffer_now() -> None:
         _CloseHandle(handle)
 
 
-class console_buffer:
+class console_buffer:  # noqa: N801 - lowercase to mirror stderr_capture above
     """Context manager that expands Windows console scrollback to 9999 lines.
 
     Uses CreateFileW("CONOUT$") to open the real console screen buffer directly
