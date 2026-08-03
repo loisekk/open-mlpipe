@@ -8,20 +8,18 @@ import time
 from rich.console import Console
 from rich.table import Table
 
-from open_mlpipe.utils.warning_display import (
-    WarningCollector,
-    capture_warnings,
-    display_warnings,
-    clear_warnings,
-    get_collector,
-    save_warning_log,
-    stderr_capture,
-)
 from open_mlpipe.config.resolver import resolve_config
 from open_mlpipe.config.schema import PipelineConfig
 from open_mlpipe.core.context import PipelineContext, StageMetadata
 from open_mlpipe.core.registry import StageRegistry
 from open_mlpipe.core.stage import Stage
+from open_mlpipe.utils.warning_display import (
+    capture_warnings,
+    clear_warnings,
+    display_warnings,
+    save_warning_log,
+    stderr_capture,
+)
 
 logger = logging.getLogger("mlpipe")
 console = Console()
@@ -146,6 +144,56 @@ class PipelineRunner:
         from rich.panel import Panel
         from rich.text import Text
 
+        # ── Model comparison table (R2 / Training R2 / MAE / RMSE / Accuracy / F1 / ROC_AUC) ──
+        comparison = self.ctx.metrics.get("model_comparison") or {}
+        valid = {k: v for k, v in comparison.items() if "per_metric" in v}
+        if valid:
+            # Determine which metric columns to show (intersection of available across models)
+            metric_names: list[str] = []
+            for v in valid.values():
+                for m in v["per_metric"]:
+                    if m not in metric_names:
+                        metric_names.append(m)
+
+            if metric_names:
+                table = Table(
+                    title="Model Comparison (cross-validated)",
+                    show_header=True,
+                    header_style="bold cyan",
+                    border_style="blue",
+                )
+                table.add_column("Model", style="bold")
+                # For each metric show <name> and "Train <name>" columns
+                for m in metric_names:
+                    table.add_column(m, justify="right")
+                    table.add_column(f"Train {m}", justify="right", style="dim")
+
+                # Sort by val R2 (or first val metric) descending so best is on top
+                def _rank(item):
+                    pm = item[1]["per_metric"]
+                    if "R2" in pm:
+                        return pm["R2"].get("val", float("-inf"))
+                    if "Accuracy" in pm:
+                        return pm["Accuracy"].get("val", float("-inf"))
+                    return float("-inf")
+
+                ranked = sorted(valid.items(), key=_rank, reverse=True)
+                from open_mlpipe.utils.warning_display import fmt_compact
+                for model_name, info in ranked:
+                    pm = info["per_metric"]
+                    row = [model_name]
+                    for m in metric_names:
+                        v = pm.get(m, {})
+                        row.append(fmt_compact(m, v.get("val", float("nan"))))
+                        row.append(fmt_compact(m, v.get("train", float("nan"))))
+                    # Highlight best row
+                    if model_name == self.ctx.best_model_name:
+                        row[0] = f"[bold green]{model_name}[/bold green]"
+                    table.add_row(*row)
+
+                console.print()
+                console.print(table)
+
         # Build summary content
         lines = Text()
         lines.append("Task                 ", style="bold")
@@ -161,9 +209,10 @@ class PipelineRunner:
         lines.append(f"{len(self.ctx.stage_history)}\n", style="cyan")
 
         if self.ctx.metrics:
+            from open_mlpipe.utils.warning_display import fmt_metric
             for k, v in self.ctx.metrics.items():
                 if isinstance(v, int | float | str) and not isinstance(v, dict):
-                    val = f"{v:.4f}" if isinstance(v, float) else str(v)
+                    val = fmt_metric(k, v) if isinstance(v, float) else str(v)
                     # Color-code metrics
                     if "accuracy" in k or "f1" in k or "r2" in k or "roc" in k or "mcc" in k:
                         style = "green"
@@ -179,7 +228,7 @@ class PipelineRunner:
         # Save warning log
         log_path = save_warning_log()
         if log_path:
-            lines.append(f"\nFull log: ", style="dim")
+            lines.append("\nFull log: ", style="dim")
             lines.append(f"{log_path}", style="cyan")
 
         panel = Panel(
