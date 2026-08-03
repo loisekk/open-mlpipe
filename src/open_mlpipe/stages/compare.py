@@ -32,6 +32,56 @@ from sklearn.pipeline import Pipeline  # noqa: E402
 from open_mlpipe.config.defaults import SmartDefaults  # noqa: E402
 from open_mlpipe.core.context import PipelineContext  # noqa: E402
 from open_mlpipe.core.stage import Stage  # noqa: E402
+
+
+def _regression_stratified_cv(y, n_splits: int = 5):
+    """Quantile-stratified KFold for continuous regression targets.
+
+    Default KFold(shuffle=True) on a heavy right-skewed target (e.g. revenue
+    0..1e6) randomly dumps all large values into one fold; that fold's mean is
+    huge, the others are tiny, R2 collapses to 0.6 / -0.05 even on clean data.
+    Bin the target into ``n_splits`` quantile groups then stratify on the
+    bins; each fold gets the same target distribution -> the model can
+    actually learn, and CV R2 stops lying about model quality.
+
+    Returns an sklearn-style CV splitter whose .split() ignores X and uses the
+    cached quantile bins as the stratification labels.
+    """
+    import numpy as np
+    import pandas as pd
+    from sklearn.model_selection import BaseCrossValidator, StratifiedKFold
+
+    class _QuantileCV(BaseCrossValidator):
+        def __init__(self, bins, n_splits):
+            self._bins = bins
+            self._sk = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+            self.n_splits = n_splits
+
+        def split(self, X=None, y=None, groups=None):
+            return self._sk.split(X=np.zeros(len(self._bins)), y=self._bins)
+
+        def get_n_splits(self, X=None, y=None, groups=None):
+            return self._sk.get_n_splits()
+
+    y_arr = np.asarray(y)
+    n_unique = len(np.unique(y_arr))
+    # Low-cardinality target (e.g. score 0..10): raw shuffled KFold is fine.
+    if n_unique < n_splits * 2:
+        return KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    try:
+        bins = pd.qcut(y_arr, q=n_splits, labels=False, duplicates="drop")
+        bins = np.asarray(bins, dtype=float)
+    except (ValueError, IndexError):
+        return KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    # If binning collapsed to too few groups, raw KFold fallback.
+    valid = bins[~np.isnan(bins)]
+    if len(np.unique(valid)) < 2:
+        return KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    # Fill any NaN bins with the nearest valid label so StratifiedKFold doesn't choke.
+    if np.isnan(bins).any():
+        med = int(np.nanmedian(valid))
+        bins = np.where(np.isnan(bins), med, bins)
+    return _QuantileCV(bins.astype(int), n_splits)
 from open_mlpipe.utils.typing import TaskType  # noqa: E402
 
 # ── All supported model names ──────────────────────────────────────────────
@@ -83,15 +133,19 @@ class CompareStage(Stage):
         # Build model instances
         models = self._build_models(candidates, task)
 
-        # CV strategy
+        # CV strategy — regression gets quantile-stratified folds so heavy
+        # right-skewed targets don't dump all large values into one fold and
+        # collapse CV R2 (the "weak model" symptom: ridge 0.66 / rf 0.65 on
+        # data whose target spans 0..1e6). Classification stays StratifiedKFold.
         cv_splits = config.model_selection.cross_validation.n_splits
         if task == TaskType.CLASSIFICATION:
-            cv = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=42)
+            cv_splitter = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=42)
         else:
-            cv = KFold(n_splits=cv_splits, shuffle=True, random_state=42)
+            cv_splitter = _regression_stratified_cv(y_train, cv_splits)
 
         # Run comparison
         results = {}
+        import warnings as _w
         for name, model in models.items():
             try:
                 pipe = Pipeline([
@@ -99,13 +153,19 @@ class CompareStage(Stage):
                     ("model", model),
                 ])
 
-                cv_results = cross_validate(
-                    pipe, X_train, y_train,
-                    cv=cv,
-                    scoring=scoring,
-                    return_train_score=True,
-                    n_jobs=1,  # n_jobs=-1 causes UnicodeDecodeError on Windows (cp1252)
-                )
+                # cross_validate fires RuntimeWarning from invalid divisions /
+                # pandas SettingWithCopy noise on some folds -- silence the
+                # cosmetic ones. Real errors are caught in the except below.
+                with _w.catch_warnings():
+                    _w.simplefilter("ignore", RuntimeWarning)
+                    _w.simplefilter("ignore", FutureWarning)
+                    cv_results = cross_validate(
+                        pipe, X_train, y_train,
+                        cv=cv_splitter,
+                        scoring=scoring,
+                        return_train_score=True,
+                        n_jobs=1,  # n_jobs=-1 causes UnicodeDecodeError on Windows (cp1252)
+                    )
 
                 # Determine primary metric for ranking
                 primary = config.model_selection.ranking_primary
@@ -125,12 +185,35 @@ class CompareStage(Stage):
                 val_mean = cv_results[f"test_{primary}"].mean()
                 train_mean = cv_results[f"train_{primary}"].mean()
 
+                # Collect per-metric means for the comparison table.
+                # Key: friendly name (R2/MAE/RMSE/etc.) -> (val_mean, train_mean)
+                # ponytail: cross_validate already returns all scoring metrics; we
+                # were dropping them by only keeping the primary. Store cheaply.
+                per_metric = {}
+                for sk_key, friendly in [
+                    ("test_r2", "R2"), ("train_r2", "R2"),
+                    ("test_neg_mean_absolute_error", "MAE"), ("train_neg_mean_absolute_error", "MAE"),
+                    ("test_neg_root_mean_squared_error", "RMSE"), ("train_neg_root_mean_squared_error", "RMSE"),
+                    ("test_accuracy", "Accuracy"), ("train_accuracy", "Accuracy"),
+                    ("test_f1_macro", "F1"), ("train_f1_macro", "F1"),
+                    ("test_roc_auc_ovr", "ROC_AUC"), ("train_roc_auc_ovr", "ROC_AUC"),
+                    ("test_roc_auc", "ROC_AUC"), ("train_roc_auc", "ROC_AUC"),
+                ]:
+                    if sk_key in cv_results:
+                        mean = float(cv_results[sk_key].mean())
+                        # sklearn negates "lower is better" metrics; flip back for display
+                        if "_neg_" in sk_key:
+                            mean = -mean
+                        split = "train" if sk_key.startswith("train_") else "val"
+                        per_metric.setdefault(friendly, {})[split] = mean
+
                 results[name] = {
                     "val_mean": val_mean,
                     "val_std": cv_results[f"test_{primary}"].std(),
                     "train_mean": train_mean,
                     "gap": train_mean - val_mean,
                     "scoring": primary,
+                    "per_metric": per_metric,
                 }
 
                 # Fit on full train for later stages
