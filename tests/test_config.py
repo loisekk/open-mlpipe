@@ -90,7 +90,7 @@ def test_tuning_config_n_trials_auto():
     assert config.engine == "optuna"
     assert config.sampler == "tpe"
     assert config.pruner == "median"
-    assert config.timeout == 3600
+    assert config.timeout == 300  # default lowered from 3600 -> 5min cap keeps big spaces responsive
 
 
 @pytest.mark.unit
