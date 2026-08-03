@@ -79,7 +79,10 @@ class TuningConfig(BaseModel):
     enabled: bool = True
     engine: str = "optuna"
     n_trials: Any = "auto"
-    timeout: int = 3600
+    # Hard ceiling -- default 5 min keeps interactive runs responsive even
+    # when the search space is large (RF now has 11 hyperparams; XGB has 11).
+    # Users wanting exhaustive tuning pass `tuning.timeout = 3600` explicitly.
+    timeout: int = 300
     sampler: str = "tpe"
     pruner: str = "median"
 
