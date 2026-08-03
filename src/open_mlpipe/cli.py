@@ -16,12 +16,57 @@ os.environ.setdefault("PYTHONUTF8", "1")
 os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 4))
 
 import click
-from InquirerPy.resolver import prompt as inquirer_prompt
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from open_mlpipe import __version__
+
+
+def _pick_from_list(title: str, choices, default_idx: int = 0):
+    """Numbered list picker via plain stdin. Fallback when InquirerPy/questionary
+    are missing or the terminal isn't a real tty (OpenCode PTY, CI, piped stdin).
+
+    Returns the chosen value, or None on empty input (caller treats as auto/default).
+    ponytail: POSIX/Windows tty libs vary; a numbered list needs no extra deps and
+    works everywhere IquirerPy doesn't. Upgrade path: install InquirerPy -> arrow keys.
+    """
+    console.print(f"\n[bold cyan]{title}[/bold cyan]")
+    for i, c in enumerate(choices, 1):
+        name = c if isinstance(c, str) else c.get("name", str(c))
+        console.print(f"  [green]{i}[/green]. {name}")
+    try:
+        raw = console.input(
+            f"[bold green]Pick (1-{len(choices)}, Enter=default {default_idx + 1}): [/bold green]"
+        ).strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not raw:
+        idx = default_idx
+    elif raw.isdigit() and 1 <= int(raw) <= len(choices):
+        idx = int(raw) - 1
+    else:
+        idx = default_idx
+    val = choices[idx]
+    return val if isinstance(val, str) else val.get("value")
+
+
+def _inquirer_prompt():
+    """Lazily import InquirerPy. Returns the prompt fn, or None if not installed."""
+    try:
+        from InquirerPy.resolver import prompt
+        return prompt
+    except ImportError:
+        return None
+
+
+def _questionary():
+    """Lazily import questionary. Returns the module, or None if not installed."""
+    try:
+        import questionary
+        return questionary
+    except ImportError:
+        return None
 
 # Force Rich to use UTF-8 on Windows instead of legacy cp1252 rendering
 console = Console(force_terminal=True, legacy_windows=False)
@@ -115,10 +160,11 @@ def print_completion_summary(ctx, start_time, session_log_path=None):
 
     # Metrics
     if ctx.metrics:
+        from open_mlpipe.utils.warning_display import fmt_metric
         for k, v in ctx.metrics.items():
             if k.startswith("test_") and isinstance(v, int | float):
                 if isinstance(v, float):
-                    table.add_row(k, f"{v:.4f}")
+                    table.add_row(k, fmt_metric(k, v))
                 else:
                     table.add_row(k, str(v))
 
@@ -156,7 +202,7 @@ def print_completion_summary(ctx, start_time, session_log_path=None):
 @click.group(invoke_without_command=True)
 @click.version_option(prog_name="open-mlpipe", version=__version__)
 @click.pass_context
-def main(ctx):
+def main(ctx) -> None:
     """open-mlpipe — Production-level automated ML pipeline."""
     if ctx.invoked_subcommand is None:
         interactive_mode()
@@ -285,7 +331,7 @@ def view() -> None:
     _show_log(None)
 
 
-def interactive_mode():
+def interactive_mode() -> None:
     """Interactive mode - like Qwen Code."""
     from open_mlpipe.utils.warning_display import _expand_buffer_now
     _expand_buffer_now()  # Buffer 9999 BEFORE any output, so banner bhi scrollback me bache
@@ -293,6 +339,13 @@ def interactive_mode():
     print_banner()
 
     console.print("[dim]Tips: Type 'run' to start pipeline, 'profile' for EDA, 'help' for commands, 'quit' to exit[/dim]\n")
+
+    # Skip the interactive prompt loop entirely when stdin is not a TTY.
+    # Tests, CI runners, and headless invocations don't have a keyboard --
+    # the loop would block forever waiting for the first prompt.
+    if not sys.stdin.isatty():
+        console.print("[dim]Non-interactive stdin detected -- exiting interactive mode.[/dim]")
+        return
 
     while True:
         try:
@@ -340,12 +393,17 @@ def interactive_mode():
                     # Interactive dataset selection
                     csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
                     if csv_files:
-                        import questionary
                         choices = [f.name for f in csv_files]
-                        selected = questionary.select(
-                            "Select a dataset:",
-                            choices=choices
-                        ).ask()
+                        questionary = _questionary()
+                        if questionary is not None:
+                            selected = questionary.select(
+                                "Select a dataset:",
+                                choices=choices
+                            ).ask()
+                        else:
+                            # Fallback: numbered list via plain stdin
+                            console.print("[yellow]Tip: pip install questionary for arrow-key menus.[/yellow]")
+                            selected = _pick_from_list("Select a dataset:", choices)
                         if selected and selected.strip():
                             data = str(p / selected)
                         else:
@@ -375,11 +433,11 @@ def interactive_mode():
                     # Build choices for InquirerPy
                     choices = []
                     for col in cols:
-                        hint = ""
+                        name = col
                         if col in [t["col"] for t in target_hints]:
                             hint_data = next(t for t in target_hints if t["col"] == col)
-                            hint = f" [dim]({hint_data['reason']})[/dim]"
-                        choices.append({"name": col, "value": col})
+                            name = f"{col} [dim]({hint_data['reason']})[/dim]"
+                        choices.append({"name": name, "value": col})
 
                     # Add auto-detect option
                     choices.insert(0, {"name": "[auto-detect] Let pipeline choose", "value": "__auto__"})
@@ -392,21 +450,34 @@ def interactive_mode():
                             console.print(f"  [green]{t['col']}[/green] [dim]- {t['reason']}[/dim]")
                         console.print()
 
-                    # Arrow key selection
-                    result = inquirer_prompt({
-                        "type": "list",
-                        "name": "target",
-                        "message": "Select target column:",
-                        "choices": choices,
-                        "default": choices[0]["value"] if target_hints else choices[1]["value"],
-                    })
+                    # Arrow key selection (InquirerPy) when available, numbered fallback otherwise
+                    inquirer_prompt = _inquirer_prompt()
+                    default_val = choices[0]["value"] if target_hints else choices[1]["value"]
+                    if inquirer_prompt is not None:
+                        result = inquirer_prompt({
+                            "type": "list",
+                            "name": "target",
+                            "message": "Select target column:",
+                            "choices": choices,
+                            "default": default_val,
+                        })
+                        target = result["target"]
+                    else:
+                        console.print("[yellow]Tip: pip install InquirerPy for arrow-key menus.[/yellow]")
+                        target = _pick_from_list(
+                            "Select target column:",
+                            choices,
+                            default_idx=0 if target_hints else 1,
+                        )
 
-                    target = result["target"]
                     if target == "__auto__":
                         target = None
                         console.print("[dim]Using auto-detect[/dim]")
-                    else:
+                    elif target:
                         console.print(f"[green]Selected: {target}[/green]")
+                    else:
+                        target = None
+                        console.print("[dim]No selection — using auto-detect[/dim]")
 
                 except Exception as e:
                     # Fallback to text input if anything fails
@@ -519,13 +590,16 @@ def _suggest_target_columns(df):
         if dtype in ("float64", "int64"):
             # Check if it looks like a label/target
             is_continuous = nunique > 20
-            has_outliers = False
 
             if is_continuous:
                 q1, q3 = df[col].quantile(0.25), df[col].quantile(0.75)
                 iqr = q3 - q1
                 if iqr > 0:
                     has_outliers = ((df[col] < q1 - 1.5 * iqr) | (df[col] > q3 + 1.5 * iqr)).sum() > 0
+                else:
+                    has_outliers = False
+            else:
+                has_outliers = False
 
             # Common target names
             target_names = ("target", "label", "y", "class", "output", "outcome", "prediction", "price", "value", "score", "amount", "total", "profit", "revenue")
@@ -535,6 +609,11 @@ def _suggest_target_columns(df):
                 suggestions.append({
                     "col": col,
                     "reason": "Possible target (name matches)",
+                })
+            elif is_continuous and has_outliers:
+                suggestions.append({
+                    "col": col,
+                    "reason": "Possible target (heavy-tail continuous)",
                 })
             elif nunique <= 10:
                 suggestions.append({
@@ -722,15 +801,21 @@ def _run_pipeline(data, target=None, project="openml"):
             except UnicodeEncodeError:
                 print("\nType 'view' or 'openml show-log' to browse the full log.")
 
-            # Offer immediate viewing
-            try:
-                answer = console.input(
-                    "\n[bold green]View full output now? (y/n)[/bold green] "
-                ).strip().lower()
-                if answer in ("y", "yes", ""):
-                    view_log(tee.path)
-            except (KeyboardInterrupt, EOFError):
-                pass
+    # Offer immediate viewing -- skip the interactive prompt when stdin is
+    # not a TTY (tests, CI, headless runs) so the CLI never blocks waiting
+    # for input that will never arrive. Kept outside the finally block so
+    # no return is needed to exit it.
+    if tee is not None and sys.stdin.isatty():
+        from open_mlpipe.utils.pager import view_log
+
+        try:
+            answer = console.input(
+                "\n[bold green]View full output now? (y/n)[/bold green] "
+            ).strip().lower()
+            if answer in ("y", "yes", ""):
+                view_log(tee.path)
+        except (KeyboardInterrupt, EOFError):
+            pass
 
 
 def _profile_data(data, target=None):
