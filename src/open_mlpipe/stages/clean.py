@@ -58,10 +58,37 @@ class CleanStage(Stage):
         return ctx
 
     def _handle_outliers(self, df, config, target_col=None):
-        """Clip outliers based on IQR method using config's threshold."""
+        """Clip outliers based on IQR method using config's threshold.
+
+        For regression targets, also clips suspicious zero/near-zero values
+        (which are usually missing data encoded as 0 — e.g. 49 houses with
+        price=0 in a real-estate dataset) and extreme outliers. Without this,
+        price=0 rows tank MAPE (division by zero) and 26.6M outliers
+        dominate MSE, making the model predict garbage.
+        """
         method = config.cleaning.outlier_method
         action = config.cleaning.outlier_action
         threshold = config.cleaning.outlier_threshold
+
+        # Handle target outliers for regression (zero-encoded-missing + extreme)
+        if target_col and target_col in df.columns:
+            import numpy as np
+            if df[target_col].dtype.kind in "biufc":
+                skew_val = float(np.abs(df[target_col].skew()))
+                if skew_val > 1.0:
+                    q_lo = float(df[target_col].quantile(0.01))
+                    q_hi = float(df[target_col].quantile(0.99))
+                    n_zero = int((df[target_col] <= 0).sum())
+                    n_outlier = int((df[target_col] > q_hi).sum() + (df[target_col] < q_lo).sum())
+                    if n_zero > 0 or n_outlier > 0:
+                        before = len(df)
+                        mask = (df[target_col] > 0) & (df[target_col] <= q_hi)
+                        df = df.loc[mask].copy()
+                        n_dropped = before - len(df)
+                        if n_dropped > 0:
+                            print(f"    Target outlier cleanup: dropped {n_dropped} rows "
+                                  f"(zero/targets: {n_zero}, >99th pct: {n_outlier}, "
+                                  f"skew was {skew_val:.2f})")
 
         if method == "auto" or method == "iqr":
             num_cols = df.select_dtypes(include=["number"]).columns
@@ -74,8 +101,8 @@ class CleanStage(Stage):
                 upper = Q3 + threshold * IQR
 
                 if action == "clip":
-                    df[col] = df[col].clip(lower=lower, upper=upper)
+                    df.loc[:, col] = df[col].clip(lower=lower, upper=upper)
                 elif action == "remove":
-                    df = df[(df[col] >= lower) & (df[col] <= upper)]
+                    df = df[(df[col] >= lower) & (df[col] <= upper)].copy()
 
         return df
