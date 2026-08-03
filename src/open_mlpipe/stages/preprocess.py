@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import warnings
 
-from sklearn.compose import ColumnTransformer, make_column_selector
+from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, PowerTransformer, StandardScaler
+from sklearn.preprocessing import (
+    FunctionTransformer,
+    OneHotEncoder,
+    PowerTransformer,
+    StandardScaler,
+)
 
 from open_mlpipe.core.context import PipelineContext
 from open_mlpipe.core.stage import Stage
