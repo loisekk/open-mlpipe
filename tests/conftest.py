@@ -5,13 +5,11 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 from tempfile import mkdtemp
-
-import numpy as np
 from typing import cast
 
+import numpy as np
 import pandas as pd
 import pytest
-
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
