@@ -9,7 +9,6 @@ from sklearn.metrics import (
     f1_score,
     matthews_corrcoef,
     mean_absolute_error,
-    mean_absolute_percentage_error,
     mean_squared_error,
     r2_score,
     roc_auc_score,
