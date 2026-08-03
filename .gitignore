@@ -38,6 +38,7 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # MkDocs build output
 site/
@@ -48,12 +49,21 @@ site/
 # MLflow
 mlflow.db
 mlruns/
+mlartifacts/
+
+# Secrets / private config
+*.secret
+secrets/
+.env.local
+private/
+.env.*
 
 # Blog files (not needed in repo)
 blog-*.md
 
 # Temp test data
 test_churn.csv
+skewed_target_demo.csv
 
 # Old/legacy files
 mlpipe/
