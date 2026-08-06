@@ -34,12 +34,14 @@ class FeatureEngTransformer(BaseEstimator, TransformerMixin):
         num_cols = df.select_dtypes(include=["number"]).columns.tolist()
         if len(num_cols) >= 2 and y is not None:
             try:
-                corrs = {}
+                corrs: dict[str, float] = {}
                 for c in num_cols:
                     valid = df[[c]].dropna()
                     if len(valid) > 10:
-                        corrs[c] = abs(np.corrcoef(df[c].fillna(0).values, np.asarray(y).ravel())[0, 1])
-                ranked = sorted(corrs, key=corrs.get, reverse=True)[:5]
+                        x_arr = np.asarray(df[c].fillna(0), dtype=float)
+                        y_arr = np.asarray(y).ravel().astype(float)
+                        corrs[c] = abs(np.corrcoef(x_arr, y_arr)[0, 1])
+                ranked = sorted(corrs, key=lambda c: corrs[c], reverse=True)[:5]
                 pairs = []
                 for i in range(len(ranked)):
                     for j in range(i + 1, min(len(ranked), 5)):
@@ -57,7 +59,10 @@ class FeatureEngTransformer(BaseEstimator, TransformerMixin):
             if c in df.columns:
                 try:
                     s = df[c].dropna()
-                    if s.min() >= 0 and s.skew() > 1.0:
+                    s = s.astype(float)
+                    min_val = float(np.asarray(s.min(), dtype=float))
+                    skew_val = float(np.asarray(s.skew(), dtype=float))
+                    if min_val >= 0 and skew_val > 1.0:
                         self.log_cols_.append(c)
                 except Exception:
                     pass
