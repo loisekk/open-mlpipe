@@ -15,7 +15,7 @@ Quick start:
     ctx = run_config("configs/regression.yaml")
 """
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 try:
     from open_mlpipe.config.schema import PipelineConfig
