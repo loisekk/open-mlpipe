@@ -123,15 +123,99 @@ BANNER_TEMPLATE = """
 
 def print_banner():
     """Print the ASCII art banner with orange color."""
-    import sys
-
     from open_mlpipe import __version__
-    if sys.platform == "win32":
-        sys.stdout.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
+    # Force UTF-8 on Windows so the box-drawing chars render rather than as
+    # cp1252 ?. Guarded: not every stdout is a real TextIOWrapper (piped
+    # subprocess, captured tests, alternate buffer) — skip reconfigure then.
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except Exception:
+            pass
     banner = BANNER_TEMPLATE.format(version=__version__)
     console.print(banner)
     console.print(f"[bold orange1]>_ openml v{__version__}[/bold orange1]")
     console.print("[dim]Production ML Pipeline | 14+ Models | One Line[/dim]")
+
+
+def print_splash() -> None:
+    """OpenCode-style splash — permanent lines, not alt-screen.
+
+    Renders the openml logo + a bold horizontal rule + a two-column
+    key-bindings table + a `pip install open-mlpipe` footer. Every line is
+    written to the main scrollback and stays there — nothing is erased, no
+    alt-screen takeover (that's what the pager does, not the splash).
+
+    Mirrors the OpenCode TUI's visual language without turning the whole
+    interactive session into a managed TUI: scrollback-permanent, like
+    Claude Code / Aider / uv.
+    """
+    import shutil as _shutil
+
+    from open_mlpipe import __version__
+
+    # Force UTF-8 on Windows so box-drawing chars render rather than as cp1252 ?.
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    term_cols = _shutil.get_terminal_size().columns
+    rule_width = max(40, min(term_cols, 78))
+    rule = "━" * rule_width
+
+    # ── Compact logo block ───────────────────────────────────────────────
+    logo = (
+        "[bold rgb(247,42,0)]"
+        "   ██████╗ ██████╗ ███████╗███╗   ██╗███╗   ███╗██╗\n"
+        "  ██╔═══██╗██╔══██╗██╔════╝████╗  ██║████╗ ████║██║\n"
+        "  ██║   ██║██████╔╝█████╗  ██╔██╗ ██║██╔████╔██║██║\n"
+        "  ██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║██║╚██╔╝██║██║\n"
+        "  ╚██████╔╝██║     ███████╗██║ ╚████║██║ ╚═╝ ██║███████╗\n"
+        "   ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝╚═╝     ╚═╝╚══════╝"
+        "[/bold rgb(247,42,0)]"
+    )
+    console.print(logo)
+
+    # ── Bold horizontal rule with version badge ──────────────────────────
+    console.print(f"[bold rgb(247,42,0)]{rule}[/bold rgb(247,42,0)]")
+    console.print(
+        f"  [bold orange1]>_ openml[/bold orange1] [dim]v{__version__}[/dim]"
+        f"  [dim]·  Production ML Pipeline  ·  14+ Models  ·  One Line[/dim]"
+    )
+    console.print(f"[bold rgb(247,42,0)]{rule}[/bold rgb(247,42,0)]\n")
+
+    # ── Two-column key-bindings in a bordered box ───────────────────────
+    kb_text = (
+        "  [bold cyan]run[/bold cyan]      Full ML pipeline        [bold cyan]profile[/bold cyan]   EDA only on dataset\n"
+        "  [bold cyan]view[/bold cyan]      Open last log in pager  [bold cyan]logs[/bold cyan]      List session logs\n"
+        "  [bold cyan]show-log[/bold cyan]  Browse a specific log   [bold cyan]help[/bold cyan]      Show all commands\n"
+        "  [bold cyan]quit[/bold cyan]      Exit openml             [bold cyan]Ctrl+C[/bold cyan]    Cancel or exit"
+    )
+    console.print(Panel(
+        kb_text,
+        title="[bold]Key Bindings[/bold]",
+        title_align="left",
+        border_style="bright_blue",
+        padding=(0, 1),
+    ))
+
+    # ── Footer — install hint + tips in a bordered box ───────────────────
+    footer_text = (
+        "  [dim]Get started:[/dim] [bold green]pip install open-mlpipe[/bold green]"
+        "  [dim]·  Docs:[/dim] [cyan]github.com/open-mlpipe[/cyan]\n"
+        "  [dim]Tips:[/dim] type [bold green]run[/bold green] to start a pipeline,"
+        " [bold green]view[/bold green] to browse last output,"
+        " [bold green]help[/bold green] for all commands."
+    )
+    console.print(Panel(
+        footer_text,
+        title="[bold]Get Started[/bold]",
+        title_align="left",
+        border_style="bright_green",
+        padding=(0, 1),
+    ))
 
 
 def print_completion_summary(ctx, start_time, session_log_path=None):
@@ -328,13 +412,13 @@ def view() -> None:
 
 
 def interactive_mode() -> None:
-    """Interactive mode - like Qwen Code."""
-    from open_mlpipe.utils.warning_display import _expand_buffer_now
-    _expand_buffer_now()  # Buffer 9999 BEFORE any output, so banner bhi scrollback me bache
+    """Interactive mode - like Qwen Code.
 
-    print_banner()
-
-    console.print("[dim]Tips: Type 'run' to start pipeline, 'profile' for EDA, 'help' for commands, 'quit' to exit[/dim]\n")
+    No Win32 console-buffer mutations (those break scrollback on Windows Terminal,
+    VS Code terminal, and some cmd hosts). We just print permanent lines like
+    every other serious CLI (Claude Code, Codex, Gemini CLI, Aider).
+    """
+    print_splash()
 
     # Skip the interactive prompt loop entirely when stdin is not a TTY.
     # Tests, CI runners, and headless invocations don't have a keyboard --
