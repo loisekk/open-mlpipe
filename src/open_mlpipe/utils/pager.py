@@ -1,29 +1,40 @@
 """Built-in cross-platform terminal pager for viewing session logs.
 
-No external dependencies — works on Windows (msvcrt), Linux/macOS (termios/tty).
-Used by `openml show-log` and interactive `view` command to browse full logs
-without losing scrollback to the host terminal emulator's buffer limits.
+Uses Rich's `Live(transient=True, screen=True)` to render the pager inside the
+terminal's alternate screen buffer. This is the same approach every serious
+TUI-style pager (less, vim, htop, Claude Code inspectors) uses:
 
-Key features:
-- Arrow keys / PageUp / PageDown to scroll
-- / to search forward, n/N for next/previous match
-- g/G to jump to start/end
-- q or Escape to quit
-- Handles long lines (truncates to terminal width)
-- Works in piped/subprocess contexts (where CONOUT$ fails)
+  * The host terminal's main scrollback stays **untouched** — nothing the user
+    printed before opening the pager ever disappears or scrolls away.
+  * While the pager is open, the transcript lives only in the alt screen.
+  * On quit (q / Esc / Ctrl+C), the alt screen closes and the cursor snaps
+    back to the home position — the user is returned to exactly the same
+    scrollback position they were at when they opened the pager.
 
-Architecture:
-- Reads the full log file into memory (lines list)
-- Draws a fit-to-terminal-height window of lines
-- Uses raw terminal input via msvcrt (Windows) or tty.setraw (Unix)
-- ANSI codes for clearing and redrawing the visible portion in-place
+Keys:
+  ↑/↓/j/k         line scroll
+  Space/PgDn      page down
+  PgUp            page up
+  g / G           top / bottom
+  Home / End      top / bottom
+  /               search forward (Enter to commit, Esc to cancel)
+  n / N           next / previous match
+  ← / →           horizontal scroll (long lines)
+  q / Esc / Ctrl+C quit
+
+No external deps beyond `rich` (already required by open-mlpipe). The pager
+falls back to plain `console.print` of the file if Rich Live cannot be entered
+(headless / piped stdin), in which case infinite scrollback just works.
 """
 
 from __future__ import annotations
 
-import shutil
 import sys
 from pathlib import Path
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 # ── Raw keyboard input ──────────────────────────────────────────────────────
 
@@ -31,19 +42,17 @@ if sys.platform == "win32":
     import msvcrt
 
     def _getch() -> bytes:
-        """Read one byte from stdin without echo or buffering."""
         return msvcrt.getch()
 
     def _kbhit() -> bool:
-        """Check if a keypress is waiting."""
         return msvcrt.kbhit()
 
 else:
+    import select
     import termios
     import tty
 
     def _getch() -> bytes:
-        """Read one byte from stdin in raw mode."""
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -54,230 +63,194 @@ else:
         return ch
 
     def _kbhit() -> bool:
-        """Non-blocking check — always returns False on Unix.
-        Alternative: select.select([sys.stdin], [], [], 0).
-        For simplicity, we block-read one char at a time on Unix.
-        """
-        import select
         return bool(select.select([sys.stdin], [], [], 0)[0])
-
-
-# ── Terminal dimensions ─────────────────────────────────────────────────────
-
-def _terminal_height() -> int:
-    """Get terminal height, falling back to 24 if unreadable."""
-    try:
-        size = shutil.get_terminal_size()
-        return max(size.lines, 5)
-    except Exception:
-        return 24
-
-
-def _terminal_width() -> int:
-    """Get terminal width, falling back to 80."""
-    try:
-        size = shutil.get_terminal_size()
-        return max(size.columns, 40)
-    except Exception:
-        return 80
-
-
-# ── ANSI helpers ────────────────────────────────────────────────────────────
-
-_CLEAR_SCREEN = "\033[2J"
-_CLEAR_LINE = "\033[2K"
-_CURSOR_HOME = "\033[H"
-_CURSOR_HIDE = "\033[?25l"
-_CURSOR_SHOW = "\033[?25h"
-_RESET = "\033[0m"
-_REVERSE = "\033[7m"
-_BOLD = "\033[1m"
-_DIM = "\033[2m"
-
-
-def _move_cursor(row: int, col: int) -> str:
-    """ANSI escape to move cursor to (row, col) — 1-indexed."""
-    return f"\033[{row};{col}H"
 
 
 # ── Pager state ─────────────────────────────────────────────────────────────
 
 class _PagerState:
-    """Mutable state for the pager — scroll position, search, dimensions."""
+    """Mutable pager state — scroll position, search, dimensions."""
 
     def __init__(self, lines: list[str], file_path: Path) -> None:
         self.lines = lines
         self.file_path = file_path
-        self.top = 0  # First visible line index
-        self.left = 0  # Horizontal scroll offset (for long lines)
-        self.height = _terminal_height() - 2  # minus status bar
-        self.width = _terminal_width()
+        self.top = 0
+        self.left = 0
+        self.height = 24
+        self.width = 80
         self.search_term = ""
         self.search_matches: list[int] = []
-        self.search_idx = -1  # Current match index within search_matches
+        self.search_idx = -1
         self.quit = False
-        self.message = ""  # Status bar message
+        self.message = ""
 
 
-# ── Drawing ─────────────────────────────────────────────────────────────────
+# ── Escape sequence decoding ────────────────────────────────────────────────
 
-def _draw_screen(state: _PagerState) -> None:
-    """Redraw the visible portion of the pager screen."""
+def _decode_escape(first_byte: bytes) -> str:
+    try:
+        ch = first_byte.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+    if len(ch) == 1:
+        code = ord(ch)
+        if code == 27:  # Escape
+            if _kbhit():
+                second = _getch()
+                if second == b"[":
+                    third = _getch()
+                    return _decode_csi(third)
+                return "escape"
+            return "escape"
+        if code == 13:
+            return "enter"
+        if code == 32:
+            return "space"
+        if code in (127, 8):
+            return "backspace"
+        if 32 <= code <= 126:
+            return ch
+        return ""
+
+    if len(ch) > 1:
+        return ch if ch.isprintable() else ""
+
+    return ""
+
+
+def _decode_csi(final: bytes) -> str:
+    try:
+        f = final.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+    mapping: dict[str, str] = {
+        "A": "up", "B": "down", "C": "right", "D": "left",
+        "H": "home", "F": "end",
+        "5": "page_up", "6": "page_down",
+        "1": "home", "4": "end", "3": "delete",
+    }
+
+    if f in mapping:
+        if f in ("5", "6", "1", "3", "4"):
+            tilde = _getch()
+            if tilde == b"~":
+                return mapping[f]
+            return ""
+        return mapping[f]
+
+    if f.isalpha() and f.upper() in mapping:
+        return mapping[f.upper()]
+
+    return ""
+
+
+# ── Rendering via Rich ──────────────────────────────────────────────────────
+
+def _render_page(state: _PagerState) -> Panel:
+    """Build a Rich Panel containing the visible window of log lines + status bar."""
     height = state.height
     width = state.width
 
-    # Build visible lines
-    visible: list[str] = []
-    for i in range(state.top, min(state.top + height, len(state.lines))):
+    visible_lines: list[Text] = []
+    end = min(state.top + height - 1, len(state.lines))  # reserve 1 line for status
+    for i in range(state.top, end):
         raw = state.lines[i]
-        # Truncate to terminal width (minus left scroll)
         if state.left > 0:
             raw = raw[state.left:]
         if len(raw) > width:
             raw = raw[:width]
-        visible.append(raw)
 
-    # Pad if fewer lines than screen height
-    while len(visible) < height:
-        visible.append("~")
+        line_text = Text(raw, style="white")
+        # Highlight search match on this line
+        if state.search_term:
+            term_lower = state.search_term.lower()
+            idx = raw.lower().find(term_lower)
+            if idx >= 0:
+                line_text = Text(raw[:idx], style="white")
+                line_text.append(raw[idx:idx + len(state.search_term)], style="bold reverse yellow")
+                line_text.append(raw[idx + len(state.search_term):], style="white")
+        # Line number gutter (subtle)
+        gutter = Text(f"{i + 1:>5} ", style="dim")
+        row = Text.assemble(gutter, line_text)
+        visible_lines.append(row)
 
-    # Build status bar
-    status = _build_status_bar(state)
+    # Pad to fill viewport
+    while len(visible_lines) < height - 1:
+        visible_lines.append(Text("~", style="dim blue"))
 
-    # Build full screen output
-    out_lines: list[str] = []
-    out_lines.append(_CURSOR_HIDE)
+    body = Text("\n").join(visible_lines) if visible_lines else Text("")
 
-    for row_idx, line in enumerate(visible):
-        out_lines.append(_move_cursor(row_idx + 1, 1))
-        out_lines.append(_CLEAR_LINE)
-
-        # Highlight search matches
-        if state.search_term and state.search_matches:
-            actual_line_idx = state.top + row_idx
-            if actual_line_idx in state.search_matches:
-                # Highlight the matching portion (case-insensitive)
-                highlighted = _highlight_search_match(line, state.search_term)
-                out_lines.append(highlighted)
-                out_lines.append(_move_cursor(row_idx + 1, 1))
-                continue
-
-        out_lines.append(line)
-
-    # Status bar at bottom
-    out_lines.append(_move_cursor(height + 1, 1))
-    out_lines.append(_CLEAR_LINE)
-    out_lines.append(_REVERSE)
-    out_lines.append(status)
-    out_lines.append(_RESET)
-
-    out_lines.append(_move_cursor(height + 1, 1))
-
-    sys.stdout.write("".join(out_lines))
-    sys.stdout.flush()
-
-
-def _build_status_bar(state: _PagerState) -> str:
-    """Build the reverse-video status bar line."""
-    width = state.width
-    pct = 0
-    if state.lines:
-        pct = int((state.top / len(state.lines)) * 100) if state.lines else 100
+    # Status bar
     total = len(state.lines)
-
-    left = f" {state.file_path.name}  "
+    pct = int((state.top / total) * 100) if total else 100
     right = f" {state.top + 1}-{min(state.top + state.height, total)}/{total} ({pct}%) "
 
-    if state.search_term:
-        search_info = f" /{state.search_term}"
-        if state.search_matches:
-            search_info += f" [{state.search_idx + 1}/{len(state.search_matches)}]"
-        center = search_info
+    if state.search_term and state.search_matches:
+        search_right = f" /{state.search_term} [{state.search_idx + 1}/{len(state.search_matches)}]"
+    elif state.search_term:
+        search_right = f" /{state.search_term} (no matches)"
     else:
-        center = ""
+        search_right = ""
 
-    # Build bar: left + padding + center + padding + right
-    mid_space = width - len(left) - len(right) - 2
-    if len(center) > mid_space:
-        center = center[:mid_space]
-    pad_left = max(0, (mid_space - len(center)) // 2)
-    pad_right = max(0, mid_space - len(center) - pad_left)
+    status_text = Text()
+    status_text.append(f" {state.file_path.name} ", style="bold cyan on reverse")
+    status_text.append("  ↑↓ scroll  / search  q quit  g/G top/bottom  ←→ h-scroll ", style="dim")
+    status_text.append(search_right, style="yellow")
+    status_text.append(right, style="bold")
 
     if state.message:
-        return state.message[:width]
+        status_text = Text(state.message[:width], style="bold yellow on blue")
 
-    return f"{left}{' ' * pad_left}{center}{' ' * pad_right}{right}"
-
-
-def _highlight_search_match(line: str, term: str) -> str:
-    """Return line with first occurrence of term highlighted using ANSI reverse."""
-    if not term:
-        return line
-    line_lower = line.lower()
-    term_lower = term.lower()
-    idx = line_lower.find(term_lower)
-    if idx < 0:
-        return line
-    before = line[:idx]
-    match = line[idx : idx + len(term)]
-    after = line[idx + len(term) :]
-    return f"{before}{_REVERSE}{_BOLD}{match}{_RESET}{after}"
+    panel = Panel(
+        body,
+        title=f"[bold]{state.file_path.name}[/bold]",
+        subtitle=status_text,
+        subtitle_align="left",
+        border_style="bright_blue",
+        padding=(0, 1),
+    )
+    return panel
 
 
 # ── Input handling ──────────────────────────────────────────────────────────
 
 def _handle_key(state: _PagerState, ch: bytes) -> None:
-    """Process a single keypress or escape sequence."""
-    # Parse escape sequences
     seq = _decode_escape(ch)
 
-    if seq == "q" or seq == "escape":
+    if seq in ("q", "escape"):
         state.quit = True
-    elif seq == "j" or seq == "down":
+    elif seq in ("j", "down"):
         _scroll_down(state, 1)
-    elif seq == "k" or seq == "up":
+    elif seq in ("k", "up"):
         _scroll_up(state, 1)
-    elif seq == "down":
-        _scroll_down(state, 1)
-    elif seq == "up":
-        _scroll_up(state, 1)
-    elif seq == "page_down" or seq == "space":
-        _scroll_down(state, state.height)
+    elif seq in ("page_down", "space"):
+        _scroll_down(state, state.height - 1)
     elif seq == "page_up":
-        _scroll_up(state, state.height)
+        _scroll_up(state, state.height - 1)
     elif seq == "g":
-        if state.search_term == "g":  # double-g
-            state.top = 0
-            state.left = 0
-            state.search_term = ""
-        else:
-            state.search_term = "g"  # first g, wait for second
-    elif seq == "shift_g" or seq == "G":
+        state.top = 0
+        state.left = 0
+    elif seq in ("G", "shift_g", "end"):
         state.top = max(0, len(state.lines) - state.height)
         state.left = 0
     elif seq == "home":
         state.top = 0
         state.left = 0
-    elif seq == "end":
-        state.top = max(0, len(state.lines) - state.height)
     elif seq == "left":
         state.left = max(0, state.left - 4)
     elif seq == "right":
-        state.left += 4  # capped by truncation in draw
+        state.left += 4
     elif seq == "/":
         state.message = "/"
-        _draw_screen(state)
         _perform_search(state)
     elif seq == "n":
         _next_search_match(state)
-        state.search_term = ""  # clear one-char search
-    elif seq == "shift_n" or seq == "N":
+    elif seq in ("N", "shift_n"):
         _prev_search_match(state)
-        state.search_term = ""  # clear one-char search
-    else:
-        # If in one-char search mode (waiting for second 'g')
-        if state.search_term == "g" and seq:
-            pass  # already handled above
+    elif seq == "enter":
+        pass  # no-op
 
 
 def _scroll_down(state: _PagerState, amount: int) -> None:
@@ -289,7 +262,11 @@ def _scroll_up(state: _PagerState, amount: int) -> None:
 
 
 def _perform_search(state: _PagerState) -> None:
-    """Interactive search: read chars until Enter, then find matches."""
+    """Interactive search — read chars until Enter."""
+    import shutil as _shutil
+    state.width = _shutil.get_terminal_size().columns
+    state.height = _shutil.get_terminal_size().lines
+
     term_chars: list[str] = []
     while True:
         ch = _getch()
@@ -298,20 +275,16 @@ def _perform_search(state: _PagerState) -> None:
         except Exception:
             continue
 
-        if char == "\r" or char == "\n":  # Enter
+        if char in ("\r", "\n"):
             break
-        elif char == "\x1b":  # Escape — cancel search
+        elif char == "\x1b":
             term_chars = []
             break
-        elif char == "\x08" or char == "\x7f":  # Backspace
+        elif char in ("\x08", "\x7f"):
             if term_chars:
                 term_chars.pop()
-                state.message = f"/{''.join(term_chars)}"
-                _draw_screen(state)
         elif len(char) == 1 and ord(char) >= 32:
             term_chars.append(char)
-            state.message = f"/{''.join(term_chars)}"
-            _draw_screen(state)
 
     search_term = "".join(term_chars)
     state.message = ""
@@ -322,7 +295,6 @@ def _perform_search(state: _PagerState) -> None:
         state.search_idx = -1
         return
 
-    # Find all matches (case-insensitive)
     matches: list[int] = []
     term_lower = search_term.lower()
     for i, line in enumerate(state.lines):
@@ -331,7 +303,7 @@ def _perform_search(state: _PagerState) -> None:
 
     state.search_matches = matches
     if matches:
-        # Jump to first match after current position
+        # Jump to first match at/after current position
         state.search_idx = 0
         for idx, m in enumerate(matches):
             if m >= state.top:
@@ -341,10 +313,6 @@ def _perform_search(state: _PagerState) -> None:
     else:
         state.search_idx = -1
         state.message = f"Pattern not found: {search_term}"
-        _draw_screen(state)
-        # Brief message, then clear
-        _getch()  # wait for any key
-        state.message = ""
 
 
 def _next_search_match(state: _PagerState) -> None:
@@ -362,96 +330,27 @@ def _prev_search_match(state: _PagerState) -> None:
     state.top = state.search_matches[state.search_idx]
 
 
-# ── Escape sequence decoding ────────────────────────────────────────────────
-
-def _decode_escape(first_byte: bytes) -> str:
-    """Decode a keypress into a named action string."""
-    try:
-        ch = first_byte.decode("utf-8", errors="replace")
-    except Exception:
-        return ""
-
-    # Single characters
-    if len(ch) == 1:
-        code = ord(ch)
-        if code == 27:  # Escape
-            # Check if there's more bytes waiting (arrow keys etc.)
-            if _kbhit():
-                second = _getch()
-                if second == b"[":
-                    third = _getch()
-                    return _decode_csi(third)
-                else:
-                    # Alt+key or lone Escape
-                    return "escape"
-            return "escape"
-        if code == 13:  # Enter
-            return "enter"
-        if code == 32:  # Space
-            return "space"
-        if code == 127 or code == 8:  # Backspace
-            return "backspace"
-        if 32 <= code <= 126:
-            return ch
-        return ""
-
-    # Multi-byte UTF-8
-    if len(ch) > 1:
-        return ch if ch.isprintable() else ""
-
-    return ""
-
-
-def _decode_csi(final: bytes) -> str:
-    """Decode CSI (Control Sequence Introducer) sequences: arrow keys, etc."""
-    try:
-        f = final.decode("utf-8", errors="replace")
-    except Exception:
-        return ""
-
-    mapping: dict[str, str] = {
-        "A": "up",
-        "B": "down",
-        "C": "right",
-        "D": "left",
-        "H": "home",
-        "F": "end",
-        "5": "page_up",   # CSI 5~
-        "6": "page_down",  # CSI 6~
-        "1": "home",       # CSI 1~  (some terminals)
-        "4": "end",        # CSI 4~  (some terminals)
-        "3": "delete",     # CSI 3~
-    }
-
-    if f in mapping:
-        # For PageUp/Down, Home/End — check if there's a tilde
-        if f in ("5", "6", "1", "3", "4"):
-            tilde = _getch()
-            if tilde == b"~":
-                return mapping[f]
-            return ""
-        return mapping[f]
-
-    # Handle shift-modified (CSI 1;2A etc.) — decode "A" at end as "up"
-    if f.isalpha() and f.upper() in mapping:
-        return mapping[f.upper()]
-
-    return ""
-
-
 # ── Public API ──────────────────────────────────────────────────────────────
 
 def view_log(log_path: str | Path) -> None:
-    """Open an interactive pager on a log file.
+    """Open an interactive pager on a log file using Rich's alternate screen.
 
-    Args:
-        log_path: Path to the session log file to view.
+    This is the safe pattern — identical to what `less`, `vim`, and Claude
+    Code's inspectors do:
+      * Render inside the alternate screen buffer (`screen=True`)
+      * `transient=True` so the pager's frames are NOT written to scrollback
+        on exit (only the original transcript above stays)
+      * On quit, the host terminal snaps back to the same scrollback position
+        the user was at before opening the pager.
 
-    Use keys:
-        ↑↓/jk — line scroll      Space/PgUp/PgDn — page scroll
-        / — search                n/N — next/prev match
-        g — top                   G — bottom
-        q/Esc — quit
+    Falls back to plain `console.print(line)` of the whole file if stdin is
+    not a TTY (headless / piped / CI), in which case infinite scrollback just
+    works without any pager.
+
+    Keys: ↑↓/jk  line scroll    Space/PgUpPgDn  page
+          /      search         n/N              next/prev match
+          g/G    top/bottom     q/Esc/Ctrl+C     quit
+          ←→     horizontal scroll (long lines)
     """
     path = Path(log_path)
     if not path.exists():
@@ -469,34 +368,71 @@ def view_log(log_path: str | Path) -> None:
         print("(empty log)", file=sys.stderr)
         return
 
-    state = _PagerState(lines, path)
+    # Headless / non-TTY: just print the log inline — scrollback handles it.
+    if not sys.stdin.isatty():
+        fallback_console = Console()
+        for line in lines:
+            fallback_console.print(line)
+        return
 
-    # Clear screen and draw initial view
-    sys.stdout.write(_CLEAR_SCREEN)
-    sys.stdout.write(_CURSOR_HOME)
-    _draw_screen(state)
+    import shutil as _shutil
+    state = _PagerState(lines, path)
+    state.height = _shutil.get_terminal_size().lines
+    state.width = _shutil.get_terminal_size().columns
+
+    pager_console = Console()
+
+    # Manually enter the alternate screen buffer. We do NOT use Rich's
+    # `Live(screen=True)` here because `Live` puts the terminal in raw mode
+    # and races our `_getch()` for stdin — arrow keys never reach the input
+    # loop, so the user can't scroll. Manual alt-screen + per-frame
+    # clear/redraw gives us full control over stdin AND preserves scrollback
+    # above (alt screen is a separate buffer; on exit we leave it and the
+    # host terminal snaps back to the original scrollback position).
+    ENTER_ALT = "\x1b[?1049h"   # enter alternate screen buffer
+    LEAVE_ALT = "\x1b[?1049l"   # leave alternate screen buffer (restore)
+    CLEAR_HOME = "\x1b[2J\x1b[H"  # clear screen + cursor home
+    HIDE_CURSOR = "\x1b[?25l"
+    SHOW_CURSOR = "\x1b[?25h"
 
     try:
+        # Enter alt screen, hide cursor, render first frame.
+        sys.stdout.write(ENTER_ALT)
+        sys.stdout.write(HIDE_CURSOR)
+        sys.stdout.flush()
+        with pager_console.capture() as capture:
+            pager_console.print(_render_page(state))
+        rendered = capture.get()
+        sys.stdout.write(CLEAR_HOME)
+        sys.stdout.write(rendered)
+        sys.stdout.flush()
+
         while not state.quit:
             ch = _getch()
             _handle_key(state, ch)
-            _draw_screen(state)
+            # Recompute dims (terminal may have resized)
+            state.height = _shutil.get_terminal_size().lines
+            state.width = _shutil.get_terminal_size().columns
+
+            # Clear + redraw the panel in place inside the alt screen.
+            with pager_console.capture() as capture:
+                pager_console.print(_render_page(state))
+            rendered = capture.get()
+            sys.stdout.write(CLEAR_HOME)
+            sys.stdout.write(rendered)
+            sys.stdout.flush()
     except KeyboardInterrupt:
         pass  # Ctrl+C quits cleanly
     finally:
-        # Restore terminal
-        sys.stdout.write(_CURSOR_SHOW)
-        sys.stdout.write(_RESET)
-        sys.stdout.write(_move_cursor(state.height + 2, 1))
-        sys.stdout.write("\n")
+        # Leave alt screen + restore cursor — host terminal snaps back to
+        # the exact scrollback position the user was at before the pager.
+        sys.stdout.write(SHOW_CURSOR)
+        sys.stdout.write(LEAVE_ALT)
         sys.stdout.flush()
 
 
 def find_latest_log() -> Path | None:
-    """Return the most recent pipeline session log, or None.
-
-    Searches the LOG_DIR for pipeline_run_*.log files, sorted by modification time.
-    """
+    """Return the most recent pipeline session log, or None."""
     from open_mlpipe.utils.warning_display import LOG_DIR
 
     log_dir = Path(LOG_DIR)

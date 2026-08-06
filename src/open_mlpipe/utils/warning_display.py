@@ -398,129 +398,39 @@ def save_warning_log() -> str | None:
 # Windows console buffer management — prevents scrollback loss during pipeline
 # ═══════════════════════════════════════════════════════════════════════════
 
-import ctypes  # noqa: E402 - loaded late so non-Windows OSes don't pay the ctypes import cost
-import ctypes.wintypes  # noqa: E402
+# ── Windows console buffer management ───────────────────────────────────────
+# REMOVED. Calling Win32 SetConsoleScreenBufferSize on the user's console
+# destroys existing scrollback on Windows Terminal, VS Code terminal, and some
+# conhost builds — this was the root cause of the "logo + previous output
+# disappears at compare stage" bug.
+#
+# The correct pattern (used by Claude Code, Codex CLI, Gemini CLI, Aider, and
+# every serious terminal app): never mutate the console. Just print permanent
+# lines. Modern terminals allocate scrollback automatically.
 
-_PIPE_LINES = 9999
-
-# Win32 console API types
-_SHORT = ctypes.wintypes.SHORT
-_WORD = ctypes.wintypes.WORD
-_DWORD = ctypes.wintypes.DWORD
-_HANDLE = ctypes.wintypes.HANDLE
-_LPCWSTR = ctypes.wintypes.LPCWSTR
-_LPVOID = ctypes.wintypes.LPVOID
-
-# Win32 constants for CreateFileW
-_GENERIC_READ = 0x80000000
-_GENERIC_WRITE = 0x40000000
-_FILE_SHARE_READ = 1
-_FILE_SHARE_WRITE = 2
-_OPEN_EXISTING = 3
-
-
-class _COORD(ctypes.Structure):
-    _fields_ = [("X", _SHORT), ("Y", _SHORT)]
-
-
-class _SMALL_RECT(ctypes.Structure):  # noqa: N801 - mirrors Win32 SMALL_RECT
-    _fields_ = [
-        ("Left", _SHORT),
-        ("Top", _SHORT),
-        ("Right", _SHORT),
-        ("Bottom", _SHORT),
-    ]
-
-
-class _CONSOLE_SCREEN_BUFFER_INFO(ctypes.Structure):  # noqa: N801 - mirrors Win32 CONSOLE_SCREEN_BUFFER_INFO
-    _fields_ = [
-        ("dwSize", _COORD),
-        ("dwCursorPosition", _COORD),
-        ("wAttributes", _WORD),
-        ("srWindow", _SMALL_RECT),
-        ("dwMaximumWindowSize", _COORD),
-    ]
-
-_kernel32 = ctypes.windll.kernel32
-_kernel32.CreateFileW.restype = _HANDLE
-_kernel32.CreateFileW.argtypes = [_LPCWSTR, _DWORD, _DWORD, ctypes.c_void_p, _DWORD, _DWORD, _HANDLE]
-_CreateFileW = _kernel32.CreateFileW
-_GetConsoleScreenBufferInfo = _kernel32.GetConsoleScreenBufferInfo
-_SetConsoleScreenBufferSize = _kernel32.SetConsoleScreenBufferSize
-_CloseHandle = _kernel32.CloseHandle
-
-
-def _open_console_handle() -> int | None:
-    """Open CONOUT$ directly — works even when GetStdHandle doesn't return a real console handle."""
-    handle = _CreateFileW(
-        "CONOUT$",
-        _GENERIC_READ | _GENERIC_WRITE,
-        _FILE_SHARE_READ | _FILE_SHARE_WRITE,
-        None,
-        _OPEN_EXISTING,
-        0,
-        None,
-    )
-    if handle in (-1, 0, None):
-        return None
-    return handle
-
-
-def _get_console_buffer_info(handle: int) -> _CONSOLE_SCREEN_BUFFER_INFO | None:
-    csbi = _CONSOLE_SCREEN_BUFFER_INFO()
-    if not _GetConsoleScreenBufferInfo(_HANDLE(handle), ctypes.byref(csbi)):
-        return None  # Invalid handle (non-console context) — silently skip
-    return csbi
-
-
-def _set_console_buffer_height(handle: int, height: int) -> None:
-    csbi = _get_console_buffer_info(handle)
-    if csbi is None:
-        return  # No console attached
-    new_size = _COORD(_SHORT(csbi.dwSize.X), _SHORT(height))
-    _SetConsoleScreenBufferSize(_HANDLE(handle), new_size)
+_PIPE_LINES = 9999  # Kept for potential external imports; unused.
 
 
 def _expand_buffer_now() -> None:
-    """Fire-and-forget: expand console scrollback to 9999 immediately.
+    """No-op retained for backward compatibility.
 
-    Call this at the very start of interactive/CLI entry, BEFORE any output.
-    No context manager needed — ek baar set, permanently.
+    Old callers may import this. It does nothing — the host terminal owns its
+    own scrollback now.
     """
-    handle = _open_console_handle()
-    if handle is not None:
-        csbi = _get_console_buffer_info(handle)
-        if csbi is not None:
-            old_buffer = csbi.dwSize.Y
-            if old_buffer != _PIPE_LINES:
-                _set_console_buffer_height(handle, _PIPE_LINES)
-                print(f"\033[2mConsole: scrollback {old_buffer} -> {_PIPE_LINES}\033[0m")
-        _CloseHandle(handle)
+    return
 
 
 class console_buffer:  # noqa: N801 - lowercase to mirror stderr_capture above
-    """Context manager that expands Windows console scrollback to 9999 lines.
+    """Deprecated no-op context manager.
 
-    Uses CreateFileW("CONOUT$") to open the real console screen buffer directly
-    — works in all Windows terminals (CMD, PowerShell, Windows Terminal, etc.),
-    even when Python's stdout is piped or redirected. No restore — ek baar set,
-    permanently. Piped subprocess (OpenCode me) silent no-op.
-
-    **Does NOT maximize window or change viewport** — sirf buffer badhata hai
-    taaki scrollback me purana content erase na ho.
-
-    Usage:
-        with console_buffer():
-            run_pipeline()
+    Previously expanded the Windows console scrollback buffer via Win32, which
+    wiped existing scrollback on several terminal hosts. Now does nothing;
+    it exists only so external code importing it doesn't break.
+    New code should not use this.
     """
 
-    def __init__(self) -> None:
-        self._handle: int | None = None
-
     def __enter__(self) -> console_buffer:
-        _expand_buffer_now()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
-        # No restore — user ne kaha buffer 9999 hi rahe permanently
         return False

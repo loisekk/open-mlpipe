@@ -24,12 +24,25 @@ from open_mlpipe import __version__
 
 
 def _pick_from_list(title: str, choices, default_idx: int = 0):
-    """Numbered list picker via plain stdin. Fallback when InquirerPy/questionary
-    are missing or the terminal isn't a real tty (OpenCode PTY, CI, piped stdin).
+    """Numbered list picker via plain stdin — permanent lines, no scrollback loss.
 
-    Returns the chosen value, or None on empty input (caller treats as auto/default).
-    ponytail: POSIX/Windows tty libs vary; a numbered list needs no extra deps and
-    works everywhere IquirerPy doesn't. Upgrade path: install InquirerPy -> arrow keys.
+    This is the primary picker for the pipeline run. Prints a numbered list of
+    options as permanent console lines, then reads the user's number from stdin.
+    Every line stays in the terminal scrollback, just like Claude Code / Codex /
+    Aider / uv / pip do for any prompt that fires during a task.
+
+    We deliberately do NOT use questionary / InquirerPy (full-screen prompt_toolkit
+    apps) here: they redraw the screen and wipe prior scrollback on exit, which is
+    exactly the "logo + previous output disappears" bug. See design notes in
+    `interactive_mode()` and `warning_display.py`.
+
+    Args:
+        title: Heading printed above the list.
+        choices: list[str] or list[{"name": str, "value": Any}].
+        default_idx: 0-based index used when the user just presses Enter.
+
+    Returns:
+        The chosen value, or None on empty input / Ctrl+C / EOF.
     """
     console.print(f"\n[bold cyan]{title}[/bold cyan]")
     for i, c in enumerate(choices, 1):
@@ -50,23 +63,6 @@ def _pick_from_list(title: str, choices, default_idx: int = 0):
     val = choices[idx]
     return val if isinstance(val, str) else val.get("value")
 
-
-def _inquirer_prompt():
-    """Lazily import InquirerPy. Returns the prompt fn, or None if not installed."""
-    try:
-        from InquirerPy.resolver import prompt
-        return prompt
-    except ImportError:
-        return None
-
-
-def _questionary():
-    """Lazily import questionary. Returns the module, or None if not installed."""
-    try:
-        import questionary
-        return questionary
-    except ImportError:
-        return None
 
 # Force Rich to use UTF-8 on Windows instead of legacy cp1252 rendering
 console = Console(force_terminal=True, legacy_windows=False)
@@ -394,16 +390,10 @@ def interactive_mode() -> None:
                     csv_files = list(p.glob("*.csv")) + list(p.glob("*.xlsx")) + list(p.glob("*.xls"))
                     if csv_files:
                         choices = [f.name for f in csv_files]
-                        questionary = _questionary()
-                        if questionary is not None:
-                            selected = questionary.select(
-                                "Select a dataset:",
-                                choices=choices
-                            ).ask()
-                        else:
-                            # Fallback: numbered list via plain stdin
-                            console.print("[yellow]Tip: pip install questionary for arrow-key menus.[/yellow]")
-                            selected = _pick_from_list("Select a dataset:", choices)
+                        # Always use numbered-line picker (permanent scrollback).
+                        # questionary/prompt_toolkit full-screen apps wipe scrollback
+                        # when they redraw — unacceptable during a pipeline run.
+                        selected = _pick_from_list("Select a dataset:", choices)
                         if selected and selected.strip():
                             data = str(p / selected)
                         else:
@@ -450,25 +440,14 @@ def interactive_mode() -> None:
                             console.print(f"  [green]{t['col']}[/green] [dim]- {t['reason']}[/dim]")
                         console.print()
 
-                    # Arrow key selection (InquirerPy) when available, numbered fallback otherwise
-                    inquirer_prompt = _inquirer_prompt()
-                    default_val = choices[0]["value"] if target_hints else choices[1]["value"]
-                    if inquirer_prompt is not None:
-                        result = inquirer_prompt({
-                            "type": "list",
-                            "name": "target",
-                            "message": "Select target column:",
-                            "choices": choices,
-                            "default": default_val,
-                        })
-                        target = result["target"]
-                    else:
-                        console.print("[yellow]Tip: pip install InquirerPy for arrow-key menus.[/yellow]")
-                        target = _pick_from_list(
-                            "Select target column:",
-                            choices,
-                            default_idx=0 if target_hints else 1,
-                        )
+                    # Always use numbered-line picker (permanent scrollback).
+                    # InquirerPy/prompt_toolkit full-screen redraws wipe prior
+                    # console scrollback — unacceptable during a pipeline run.
+                    target = _pick_from_list(
+                        "Select target column:",
+                        choices,
+                        default_idx=0 if target_hints else 1,
+                    )
 
                     if target == "__auto__":
                         target = None
@@ -705,7 +684,6 @@ def _run_pipeline(data, target=None, project="openml"):
     from open_mlpipe.utils.warning_display import (
         LOG_DIR,
         WarningCollector,
-        console_buffer,
     )
 
     p = Path(data)
@@ -746,8 +724,9 @@ def _run_pipeline(data, target=None, project="openml"):
 
         _signal.signal(_signal.SIGINT, _handle_interrupt)
 
-        with console_buffer():
-            ctx = runner.run()
+        # Run pipeline. Output is append-only permanent lines so scrollback
+        # (including banner + every stage) stays visible in all terminals.
+        ctx = runner.run()
 
         print_completion_summary(ctx, start_time, session_log_path)
 
@@ -792,8 +771,9 @@ def _run_pipeline(data, target=None, project="openml"):
             try:
                 console.print(
                     Panel(
-                        "[bold green]v[/bold green] = view full log in interactive pager\n"
-                        "  [dim]↑↓ scroll  / search  q quit  PgUp/PgDn page[/dim]",
+                        "[bold green]v[/bold green] = view full log in interactive pager"
+                        "  [dim](opens in alt screen; scrollback kept)[/dim]\n"
+                        "  ↑↓ scroll  / search  q quit  PgUp/PgDn page",
                         title="[bold]View pipeline output[/bold]",
                         border_style="bright_green",
                     )
@@ -801,18 +781,20 @@ def _run_pipeline(data, target=None, project="openml"):
             except UnicodeEncodeError:
                 print("\nType 'view' or 'openml show-log' to browse the full log.")
 
-    # Offer immediate viewing -- skip the interactive prompt when stdin is
-    # not a TTY (tests, CI, headless runs) so the CLI never blocks waiting
-    # for input that will never arrive. Kept outside the finally block so
-    # no return is needed to exit it.
+    # Offer immediate viewing — ONLY on explicit 'y'. Empty Enter = no (don't
+    # silently swallow the user into a pager they didn't ask for). Skip on
+    # non-TTY stdin so CI / tests / piped runs never block on a prompt.
     if tee is not None and sys.stdin.isatty():
         from open_mlpipe.utils.pager import view_log
 
         try:
             answer = console.input(
-                "\n[bold green]View full output now? (y/n)[/bold green] "
+                "\n[bold green]View full output now? (y/N)[/bold green] "
             ).strip().lower()
-            if answer in ("y", "yes", ""):
+            if answer in ("y", "yes"):
+                # Pager opens in the alternate screen — main scrollback
+                # (banner, every stage, completion summary) is preserved
+                # exactly as it was before the pager took over.
                 view_log(tee.path)
         except (KeyboardInterrupt, EOFError):
             pass
