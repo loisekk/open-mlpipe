@@ -95,12 +95,39 @@ def _decode_escape(first_byte: bytes) -> str:
 
     if len(ch) == 1:
         code = ord(ch)
-        if code == 27:  # Escape
+
+        # Windows arrow keys via msvcrt.getch() send a 2-byte sequence:
+        #   \x00 (NUL prefix)  + H/P/M/K  for up/down/right/left
+        #   \xe0 (extended)    + H/P/M/K  for the same on some keyboards
+        # We must read the second byte immediately or it stays in the buffer
+        # and corrupts the next keystroke.
+        if code == 0 or code == 224:  # \x00 or \xe0
+            if _kbhit():
+                second = _getch()
+                try:
+                    s = second.decode("utf-8", errors="replace")
+                except Exception:
+                    return ""
+                win_map: dict[str, str] = {
+                    "H": "up", "P": "down", "M": "right", "K": "left",
+                    "I": "page_up", "Q": "page_down",
+                    "G": "home", "O": "end",
+                    "S": "delete", "R": "end",
+                }
+                return win_map.get(s, "")
+
+        if code == 27:  # Escape — could be ESC alone or ANSI CSI sequence
             if _kbhit():
                 second = _getch()
                 if second == b"[":
+                    # ANSI CSI: \x1b[<final> — Windows Terminal sends these
                     third = _getch()
                     return _decode_csi(third)
+                if second == b"O":
+                    # \x1b O <letter> — SS3 sequence (some F-keys / arrows in xterm)
+                    third = _getch()
+                    return _decode_csi(third)
+                # ESC followed by a plain char — treat as ESC (quit)
                 return "escape"
             return "escape"
         if code == 13:

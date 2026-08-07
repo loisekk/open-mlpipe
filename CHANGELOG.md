@@ -4,6 +4,19 @@ All notable changes to **open-mlpipe** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] — 2026-08-07
+
+### Fixed
+- **Pager arrow keys now work in regular PowerShell / conhost / cmd.**
+  Windows `msvcrt.getch()` sends arrow keys as a 2-byte sequence
+  (`\x00` or `\xe0` prefix followed by `H`/`P`/`M`/`K`), not the ANSI
+  `\x1b[A` form. The previous `_decode_escape` only handled the ANSI
+  form (Windows Terminal / Kitty), so pressing arrow keys in classic
+  PowerShell did nothing — the pager showed lines 1-64/113 but could
+  not scroll. Now both encodings are recognised, including PgUp/PgDn,
+  Home/End, Delete, and the `\x1b O <letter>` SS3 form some terminals
+  emit. j/k vim-style bindings were unaffected.
+
 ## [1.0.8] — 2026-08-06
 
 ### Added
