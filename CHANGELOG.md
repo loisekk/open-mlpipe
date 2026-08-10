@@ -4,6 +4,19 @@ All notable changes to **open-mlpipe** are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] — 2026-08-10
+
+### Fixed
+- **README + PyPI metadata pointed at the wrong GitHub repo.** The stars /
+  forks badge URLs, the docs link in the table of contents, and all four
+  `[project.urls]` entries in `pyproject.toml` (Homepage, Documentation,
+  Repository, Issues — these are the sidebar links on the PyPI project page)
+  referenced `github.com/yashb/mlpipe`, which 404s. The real repo is
+  `github.com/loisekk/open-mlpipe`. As a side effect, the stars / forks
+  badges on the README were rendering as the literal alt-text strings
+  "GitHub stars" / "GitHub forks" because shields.io returned a "not found"
+  SVG. All five occurrences fixed.
+
 ## [1.0.9] — 2026-08-07
 
 ### Fixed

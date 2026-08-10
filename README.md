@@ -32,8 +32,8 @@ Zero-touch AutoML for tabular data — trains, tunes, evaluates, and saves produ
 [![Python](https://img.shields.io/pypi/pyversions/open-mlpipe?color=EF4444&style=for-the-badge)](https://pypi.org/project/open-mlpipe/)
 [![Downloads](https://img.shields.io/pypi/dm/open-mlpipe?color=EF4444&style=for-the-badge)](https://pypi.org/project/open-mlpipe/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-EF4444?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![GitHub stars](https://img.shields.io/github/stars/yashb/mlpipe?color=EF4444&style=for-the-badge)](https://github.com/yashb/mlpipe/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yashb/mlpipe?color=EF4444&style=for-the-badge)](https://github.com/yashb/mlpipe/network/members)
+[![GitHub stars](https://img.shields.io/github/stars/loisekk/open-mlpipe?color=EF4444&style=for-the-badge)](https://github.com/loisekk/open-mlpipe/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/loisekk/open-mlpipe?color=EF4444&style=for-the-badge)](https://github.com/loisekk/open-mlpipe/network/members)
 
 <br>
 
@@ -60,7 +60,7 @@ Zero-touch AutoML for tabular data — trains, tunes, evaluates, and saves produ
 
 <br>
 
-**[Quick Start](#-quick-start) · [Pipeline](#-how-it-works) · [Models](#-supported-models) · [Python API](#-python-api) · [CLI](#-cli-usage) · [Config](#-yaml-config) · [Architecture](#-architecture) · [Docs](https://github.com/yashb/mlpipe#readme)**
+**[Quick Start](#-quick-start) · [Pipeline](#-how-it-works) · [Models](#-supported-models) · [Python API](#-python-api) · [CLI](#-cli-usage) · [Config](#-yaml-config) · [Architecture](#-architecture) · [Docs](https://github.com/loisekk/open-mlpipe#readme)**
 
 </div>
 
@@ -394,8 +394,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 | Where | Link |
 |-------|------|
 | **PyPI** | [pypi.org/project/open-mlpipe](https://pypi.org/project/open-mlpipe/) |
-| **GitHub** | [github.com/yashb/mlpipe](https://github.com/yashb/mlpipe) |
-| **Issues** | [github.com/yashb/mlpipe/issues](https://github.com/yashb/mlpipe/issues) |
+| **GitHub** | [github.com/loisekk/open-mlpipe](https://github.com/loisekk/open-mlpipe) |
+| **Issues** | [github.com/loisekk/open-mlpipe/issues](https://github.com/loisekk/open-mlpipe/issues) |
 
 <br>
 

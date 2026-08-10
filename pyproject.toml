@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "open-mlpipe"
-version = "1.0.9"
+version = "1.0.10"
 description = "Production-level automated ML pipeline — from raw data to deployed model in one line"
 readme = "README.md"
 license = "MIT"
@@ -53,10 +53,10 @@ interactive = ["InquirerPy>=0.3", "questionary>=2.0"]
 full = ["catboost>=1.2", "mlflow>=2.12", "fastapi>=0.110", "uvicorn>=0.29", "pyarrow>=14.0", "openpyxl>=3.1", "imbalanced-learn>=0.12", "seaborn>=0.13", "matplotlib>=3.7", "InquirerPy>=0.3", "questionary>=2.0"]
 
 [project.urls]
-Homepage = "https://github.com/yashb/mlpipe"
-Documentation = "https://github.com/yashb/mlpipe#readme"
-Repository = "https://github.com/yashb/mlpipe"
-Issues = "https://github.com/yashb/mlpipe/issues"
+Homepage = "https://github.com/loisekk/open-mlpipe"
+Documentation = "https://github.com/loisekk/open-mlpipe#readme"
+Repository = "https://github.com/loisekk/open-mlpipe"
+Issues = "https://github.com/loisekk/open-mlpipe/issues"
 
 [project.scripts]
 openml = "open_mlpipe.cli:main"
